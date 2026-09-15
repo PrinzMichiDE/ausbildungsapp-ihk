@@ -1,0 +1,45 @@
+import { PrismaService } from '../../database/prisma.service.js';
+import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
+import { CurrentUser } from '../../common/decorators/current-user.type.js';
+import { AuditService } from '../audit/audit.service.js';
+import { ConsentGrantDto, ConsentLogResponseDto, ConsentResponseDto, CreateDatenschutzRequestDto, DatenschutzRequestResponseDto, DpiaDto, DpiaResponseDto, LegalBasisDto, LegalBasisResponseDto, PersonalDataExport, ProcessDatenschutzRequestDto, UpdateDpiaDto, UpdateLegalBasisDto } from './dto/data-privacy.dto.js';
+export declare class DatenschutzService {
+    private readonly prisma;
+    private readonly scope;
+    private readonly audit;
+    private readonly logger;
+    constructor(prisma: PrismaService, scope: AccessScopeService, audit: AuditService);
+    createRequest(currentUser: CurrentUser, dto: CreateDatenschutzRequestDto): Promise<DatenschutzRequestResponseDto>;
+    findAllRequests(currentUser: CurrentUser): Promise<DatenschutzRequestResponseDto[]>;
+    findRequest(id: string, currentUser: CurrentUser): Promise<DatenschutzRequestResponseDto>;
+    processRequest(id: string, currentUser: CurrentUser, dto: ProcessDatenschutzRequestDto): Promise<DatenschutzRequestResponseDto>;
+    exportPersonalData(id: string, currentUser: CurrentUser): Promise<PersonalDataExport>;
+    anonymize(azubiId: string, currentUser: CurrentUser): Promise<{
+        ok: boolean;
+        anonymizedUserId: string;
+    }>;
+    findConsents(currentUser: CurrentUser): Promise<ConsentResponseDto[]>;
+    grantConsent(currentUser: CurrentUser, dto: ConsentGrantDto, ipAddress?: string): Promise<ConsentResponseDto>;
+    revokeConsent(currentUser: CurrentUser, key: string, version?: string, ipAddress?: string): Promise<ConsentResponseDto>;
+    findConsentLog(currentUser: CurrentUser): Promise<ConsentLogResponseDto[]>;
+    findAllLegalBases(): Promise<LegalBasisResponseDto[]>;
+    createLegalBasis(dto: LegalBasisDto): Promise<LegalBasisResponseDto>;
+    updateLegalBasis(id: string, dto: UpdateLegalBasisDto): Promise<LegalBasisResponseDto>;
+    removeLegalBasis(id: string): Promise<void>;
+    findAllDpia(): Promise<DpiaResponseDto[]>;
+    createDpia(currentUser: CurrentUser, dto: DpiaDto): Promise<DpiaResponseDto>;
+    updateDpia(id: string, currentUser: CurrentUser, dto: UpdateDpiaDto): Promise<DpiaResponseDto>;
+    removeDpia(id: string): Promise<void>;
+    private collectPersonalData;
+    private scopeWhere;
+    private assertCanRead;
+    private assertProcessor;
+    private loadRequest;
+    private loadLegalBasis;
+    private loadDpia;
+    private toRequestResponse;
+    private toConsentResponse;
+    private toConsentLogResponse;
+    private toLegalBasisResponse;
+    private toDpiaResponse;
+}

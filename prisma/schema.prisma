@@ -1,0 +1,1439 @@
+// Prisma-Schema für "NextGen IT-Ausbildung"
+// Naming: camelCase in Prisma, snake_case in DB via @map (siehe DB-Regeln).
+// UUID-Primary-Keys, synchronize: false (Migrations only).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider             = "postgresql"
+  url                  = env("DATABASE_URL")
+  shadowDatabaseUrl    = env("SHADOW_DATABASE_URL")
+}
+
+enum Role {
+  azubi
+  ausbildungsbeauftragter
+  ausbilder
+  hr
+  admin
+}
+
+enum ReportStatus {
+  entwurf
+  eingereicht
+  in_pruefung
+  visiert
+  archiviert
+}
+
+enum ReportTyp {
+  betrieb
+  berufsschule
+  schulung
+}
+
+enum AbwesenheitTyp {
+  urlaub
+  krank
+  berufsschule
+}
+
+enum AbwesenheitQuelle {
+  manuell
+  personio
+  ical
+}
+
+enum FeedbackTyp {
+  abteilungsbewertung
+  azubi_feedback
+}
+
+enum AiDocumentStatus {
+  importiert
+  vektorisiert
+  fehler
+}
+
+enum ProjektStatus {
+  entwurf
+  eingereicht
+  in_pruefung
+  freigegeben
+  abgelehnt
+  archiviert
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique @map("email")
+  passwordHash String   @map("password_hash")
+  firstName    String   @map("first_name")
+  lastName     String   @map("last_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  azubiId      String?  @unique @map("azubi_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  roles      UserRole[]
+  abteilungen Abteilung[] @relation("AbteilungVerantwortliche")
+  einsaetze  Einsatz[]   @relation("EinsatzAzubi")
+  berichte   Report[]
+  kommentare ReportComment[]
+  zertifikate Zertifikat[]
+  abwesenheiten Abwesenheit[]
+  noten      Grade[]
+  bewerteteNoten Grade[] @relation("GradeBewertetVon")
+  feedbackGegeben Feedback[] @relation("FeedbackVon")
+  feedbackErhalten Feedback[] @relation("FeedbackAn")
+  badges     UserBadge[]
+  checklisten Checklist[]
+  projekte   Projekt[]
+  pruefungen Pruefung[]
+  auditEvents AuditEvent[]
+  mfaSecret    String?                @map("mfa_secret")
+  mfaActive    Boolean                @default(false) @map("mfa_active")
+
+  notifications           Notification[]
+  notificationPreferences NotificationPreference[]
+  datenschutzRequests     DatenschutzRequest[]
+  ausbildungsplaeneAzubi Ausbildungsplan[] @relation("AusbildungsplanAzubi")
+  ausbildungsplaeneAusbilder Ausbildungsplan[] @relation("AusbildungsplanAusbilder")
+  ausbildungsvertrag Ausbildungsvertrag?
+  erziehungsberechtigte Erziehungsberechtigter[]
+  feedbackGespraecheAzubi FeedbackGespraech[] @relation("FeedbackGespraechAzubi")
+  feedbackGespraecheDurchfuehrer FeedbackGespraech[] @relation("FeedbackGespraechDurchfuehrer")
+  gradeEntries GradeEntry[] @relation("GradeEntryAzubi")
+  foerderbedarfe Foerderbedarf[] @relation("FoerderbedarfAzubi")
+  uebernahmeGespraeche UebernahmeGespraech[] @relation("UebernahmeAzubi")
+  alumni Alumni?
+  versetzungswuensche Versetzungswunsch[]
+  consents                Consent[]
+  consentLogs             ConsentLog[]
+  skillAssignments        SkillAssignment[] @relation("SkillAssignmentAzubi")
+  lernpfad                Lernpfad[]        @relation("LernpfadAzubi")
+  lernpfadErstellt        Lernpfad[]        @relation("LernpfadErsteller")
+
+  @@index([azubiId], map: "idx_users_azubi_id")
+  @@map("users")
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String @map("user_id")
+  role   Role
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_user_roles_user_id")
+  @@index([role], map: "idx_user_roles_role")
+  @@map("user_roles")
+}
+
+model Abteilung {
+   id          String  @id @default(uuid())
+   name        String
+   kurzzeichen String? @map("kurzzeichen")
+   beschreibung String? @map("beschreibung")
+   standortId  String? @map("standort_id")
+   createdAt   DateTime @default(now()) @map("created_at")
+   updatedAt   DateTime @updatedAt @map("updated_at")
+
+  verantwortliche User[] @relation("AbteilungVerantwortliche")
+  einsaetze      Einsatz[]
+  feedback       Feedback[]
+
+  @@map("abteilungen")
+}
+
+model Einsatz {
+  id           String   @id @default(uuid())
+  azubiId      String   @map("azubi_id")
+  abteilungId  String   @map("abteilung_id")
+  von          DateTime
+  bis          DateTime
+  skillLevel   Int      @default(0) @map("skill_level")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  azubi     User      @relation("EinsatzAzubi", fields: [azubiId], references: [id], onDelete: Cascade)
+  abteilung Abteilung @relation(fields: [abteilungId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_einsatz_azubi_id")
+  @@index([abteilungId], map: "idx_einsatz_abteilung_id")
+  @@index([von, bis], map: "idx_einsatz_von_bis")
+  @@map("einsatz")
+}
+
+model Framework {
+  id          String   @id @default(uuid())
+  titel       String
+  lernfeld    String
+  kompetenz   String
+  beschreibung String?
+  quelle      String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  courses Course[]
+  tasks   Task[]
+  skillAssignments SkillAssignment[]
+  benchmarks       SkillMatrixBenchmark[]
+
+  @@index([lernfeld], map: "idx_framework_lernfeld")
+  @@map("frameworks")
+}
+
+model Course {
+  id              String   @id @default(uuid())
+  frameworkId     String   @map("framework_id")
+  titel           String
+  beschreibung    String?
+  lernziele       String[]
+  theorie         String?
+  freigegeben     Boolean  @default(false)
+  kiGeneriert     Boolean  @default(false) @map("ki_generiert")
+  qualitaetsScore Int?     @map("qualitaets_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  framework Framework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  tasks    Task[]
+  grades   Grade[]
+  skillAssignments SkillAssignment[]
+  lernpfad         Lernpfad[]
+
+  @@index([frameworkId], map: "idx_course_framework_id")
+  @@index([freigegeben], map: "idx_course_freigegeben")
+  @@map("courses")
+}
+
+model Task {
+  id            String   @id @default(uuid())
+  frameworkId   String   @map("framework_id")
+  courseId      String?  @map("course_id")
+  titel         String
+  beschreibung  String?
+  musterloesung String?  @map("musterloesung")
+  freigegeben   Boolean  @default(false)
+  kiGeneriert   Boolean  @default(false) @map("ki_generiert")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  framework Framework  @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  course    Course?    @relation(fields: [courseId], references: [id], onDelete: SetNull)
+  reportTasks ReportTask[]
+
+  @@index([frameworkId], map: "idx_task_framework_id")
+  @@index([courseId], map: "idx_task_course_id")
+  @@map("tasks")
+}
+
+model Report {
+  id              String       @id @default(uuid())
+  azubiId         String       @map("azubi_id")
+  titel           String
+  typ             ReportTyp
+  kalenderwoche   Int          @map("kalenderwoche")
+  jahr            Int
+  datumVon       DateTime     @map("datum_von")
+  datumBis       DateTime     @map("datum_bis")
+  inhaltMarkdown  String       @map("inhalt_markdown")
+  status          ReportStatus @default(entwurf)
+  signiertVon     String?      @map("signiert_von")
+  signiertAm      DateTime?    @map("signiert_am")
+  archiviertAm    DateTime?    @map("archiviert_am")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+
+  azubi      User           @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+  reportTasks ReportTask[]
+  kommentare ReportComment[]
+  attachments ReportAttachment[]
+   versions ReportVersion[]
+   timeEntries ReportTimeEntry[]
+   ausbildungsnachweisId String? @map("ausbildungsnachweis_id")
+
+   @@index([azubiId], map: "idx_report_azubi_id")
+  @@index([status], map: "idx_report_status")
+  @@index([jahr, kalenderwoche], map: "idx_report_jahr_kw")
+  @@map("reports")
+}
+
+model ReportTask {
+  id          String   @id @default(uuid())
+  reportId    String   @map("report_id")
+  taskId      String   @map("task_id")
+  kommentar   String?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@unique([reportId, taskId], map: "uq_report_task")
+  @@index([reportId], map: "idx_report_task_report_id")
+  @@index([taskId], map: "idx_report_task_task_id")
+  @@map("report_tasks")
+}
+
+model ReportComment {
+  id        String   @id @default(uuid())
+  reportId  String   @map("report_id")
+  authorId  String   @map("author_id")
+  text      String
+  art       String   @default("bemerkung")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  author User   @relation(fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([reportId], map: "idx_report_comment_report_id")
+  @@map("report_comments")
+}
+
+model AiDocument {
+  id        String          @id @default(uuid())
+  filename  String
+  quelle    String?
+  inhalt    String
+  status    AiDocumentStatus @default(importiert)
+  createdAt DateTime        @default(now()) @map("created_at")
+  updatedAt DateTime        @updatedAt @map("updated_at")
+
+  chunks AiDocumentChunk[]
+
+  @@map("ai_documents")
+}
+
+model AiDocumentChunk {
+  id          String   @id @default(uuid())
+  documentId  String   @map("document_id")
+  inhalt      String
+  embedding   Float[]  @map("embedding")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  document AiDocument @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId], map: "idx_ai_chunk_document_id")
+  @@map("ai_document_chunks")
+}
+
+model Zertifikat {
+  id          String   @id @default(uuid())
+  azubiId     String   @map("azubi_id")
+  titel       String
+  aussteller  String
+  erworbenAm  DateTime @map("erworben_am")
+  dokumentUrl String?  @map("dokument_url")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_zertifikat_azubi_id")
+  @@map("zertifikate")
+}
+
+model Abwesenheit {
+  id        String           @id @default(uuid())
+  azubiId   String           @map("azubi_id")
+   typ            AbwesenheitTyp
+   quelle         AbwesenheitQuelle @default(manuell)
+   von            DateTime
+   bis            DateTime
+   urlaubsanspruch Float @default(0) @map("urlaubsanspruch")
+   notiz          String?
+   createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_abwesenheit_azubi_id")
+  @@index([von, bis], map: "idx_abwesenheit_von_bis")
+  @@map("abwesenheiten")
+}
+
+model Checklist {
+  id        String   @id @default(uuid())
+  azubiId   String   @map("azubi_id")
+  titel     String
+  erledigt  Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  azubi  User           @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+  items  ChecklistItem[]
+
+  @@index([azubiId], map: "idx_checklist_azubi_id")
+  @@map("checklisten")
+}
+
+model ChecklistItem {
+  id          String   @id @default(uuid())
+  checklistId String   @map("checklist_id")
+  text        String
+  erledigt    Boolean  @default(false)
+  reihenfolge Int      @default(0) @map("reihenfolge")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  checklist Checklist @relation(fields: [checklistId], references: [id], onDelete: Cascade)
+
+  @@index([checklistId], map: "idx_checklist_item_checklist_id")
+  @@map("checklist_items")
+}
+
+model Feedback {
+  id          String      @id @default(uuid())
+  vonUserId   String      @map("von_user_id")
+  anUserId    String?     @map("an_user_id")
+  abteilungId String?     @map("abteilung_id")
+  typ         FeedbackTyp
+  fachkompetenz Int?      @map("fachkompetenz")
+  softskills  Int?        @map("softskills")
+  kommentar   String?
+  createdAt   DateTime    @default(now()) @map("created_at")
+
+  vonUser   User        @relation("FeedbackVon", fields: [vonUserId], references: [id], onDelete: Cascade)
+  anUser    User?       @relation("FeedbackAn", fields: [anUserId], references: [id], onDelete: SetNull)
+  abteilung Abteilung?  @relation(fields: [abteilungId], references: [id], onDelete: SetNull)
+
+  @@index([vonUserId], map: "idx_feedback_von_user_id")
+  @@index([anUserId], map: "idx_feedback_an_user_id")
+  @@map("feedback")
+}
+
+model WikiPage {
+  id          String   @id @default(uuid())
+  titel       String
+  slug        String   @unique
+  kategorie   String?
+  inhaltMarkdown String @map("inhalt_markdown")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([kategorie], map: "idx_wiki_kategorie")
+  @@map("wiki_pages")
+}
+
+enum GradeStatus {
+  entwurf
+  bestaetigt
+  visiert
+  archiviert
+}
+
+enum Halbjahr {
+  erstes
+  zweites
+}
+
+enum Pruefungsart {
+  schriftlich
+  muendlich
+  projektarbeit
+  sonstige
+}
+
+enum GradeTyp {
+  note
+  zertifikat
+  projekt
+  versetzungszeugnis
+}
+
+enum Gewichtungskategorie {
+  schulisch
+  berufsschulisch
+  betrieblich
+  ihk_pruefung
+}
+
+model Grade {
+  id              String        @id @default(uuid())
+  azubiId         String        @map("azubi_id")
+  fach            String
+  note            Float
+  zeitraum        String
+  halbjahr        Halbjahr?     @map("halbjahr")
+  datum           DateTime?     @map("datum")
+  pruefungsart    Pruefungsart? @map("pruefungsart")
+  gewichtung      Float?        @default(1.0)
+  gewichtungsKategorie Gewichtungskategorie? @map("gewichtungs_kategorie")
+  typ             GradeTyp      @default(note)
+  status          GradeStatus   @default(entwurf)
+  beschreibung    String?
+  bemerkungen     String?       @map("bemerkungen")
+  prueferId       String?       @map("pruefer_id")
+  pruefungsdatum  DateTime?     @map("pruefungsdatum")
+  wiederholung    Boolean       @default(false) @map("wiederholung")
+  maßnahme        String?
+  zeugnisUrl      String?       @map("zeugnis_url")
+  quellenUrl      String?       @map("quellen_url")
+  kursId          String?       @map("kurs_id")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  bewertetVon     String?       @map("bewertet_von")
+  bewertetAm      DateTime?     @map("bewertet_am")
+  bewertung       String?       @map("bewertung")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+  course Course? @relation(fields: [kursId], references: [id], onDelete: SetNull)
+  bewertetVonUser User[] @relation("GradeBewertetVon")
+  gradeVersions GradeVersion[]
+
+  @@index([azubiId], map: "idx_grade_azubi_id")
+  @@index([fach], map: "idx_grade_fach")
+  @@index([status], map: "idx_grade_status")
+  @@index([typ], map: "idx_grade_typ")
+  @@index([datum], map: "idx_grade_datum")
+  @@map("grades")
+}
+
+model GradeVersion {
+  id          String   @id @default(uuid())
+  gradeId     String   @map("grade_id")
+  version     Int
+  fach        String
+  note        Float
+  status      GradeStatus
+  zeitraum    String
+  halbjahr    Halbjahr? @map("halbjahr")
+  datum       DateTime? @map("datum")
+  pruefungsart Pruefungsart? @map("pruefungsart")
+  gewichtung  Float?   @default(1.0)
+  gewichtungsKategorie Gewichtungskategorie? @map("gewichtungs_kategorie")
+  typ         GradeTyp @default(note)
+  bemerkungen String?
+  prueferId   String?  @map("pruefer_id")
+  pruefungsdatum DateTime? @map("pruefungsdatum")
+  wiederholung Boolean  @default(false) @map("wiederholung")
+  maßnahme    String?
+  zeugnisUrl  String?  @map("zeugnis_url")
+  bewertetVon String?  @map("bewertet_von")
+  bewertetAm  DateTime? @map("bewertet_am")
+  erstelltVon String?  @map("erstellt_von")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  grade Grade @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+
+  @@index([gradeId], map: "idx_gradeversion_grade_id")
+  @@index([version], map: "idx_gradeversion_version")
+  @@map("grade_versions")
+}
+
+model Badge {
+  id           String   @id @default(uuid())
+  schluessel   String   @unique @map("schluessel")
+  titel        String
+  beschreibung String?
+  icon         String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  userBadges UserBadge[]
+
+  @@map("badges")
+}
+
+model UserBadge {
+  id        String   @id @default(uuid())
+  azubiId   String   @map("azubi_id")
+  badgeId   String   @map("badge_id")
+  earnedAt  DateTime @default(now()) @map("earned_at")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+  badge Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([azubiId, badgeId], map: "uq_user_badge")
+  @@index([azubiId], map: "idx_user_badge_azubi_id")
+  @@map("user_badges")
+}
+
+model Projekt {
+  id             String        @id @default(uuid())
+  azubiId        String        @map("azubi_id")
+  titel          String
+  beschreibung   String?       @map("beschreibung")
+  projektantrag  String?       @map("projektantrag")
+  projektdoku    String?       @map("projektdoku")
+  status         ProjektStatus @default(entwurf)
+  bewertung      String?
+  bewertetVon    String?       @map("bewertet_von")
+  bewertetAm     DateTime?     @map("bewertet_am")
+  freigegeben    Boolean       @default(false)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_projekt_azubi_id")
+  @@index([status], map: "idx_projekt_status")
+  @@map("projekte")
+}
+
+model AuditEvent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  action    String
+  entity    String?
+  entityId  String?  @map("entity_id")
+  details   String?
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_audit_user_id")
+  @@index([action], map: "idx_audit_action")
+  @@index([createdAt], map: "idx_audit_created_at")
+  @@map("audit_events")
+}
+
+enum PruefungTyp {
+  ap1
+  ap2
+}
+
+enum PruefungsStatus {
+  angemeldet
+  teilgenommen
+  bestanden
+  wiederholung
+}
+
+model Pruefung {
+  id           String            @id @default(uuid())
+  azubiId      String            @map("azubi_id")
+  typ          PruefungTyp
+  status       PruefungsStatus   @default(angemeldet)
+  ihkTermin    DateTime?         @map("ihk_termin")
+  beschreibung String?
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt @map("updated_at")
+
+  azubi        User              @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+  meilensteine PruefungsMeilenstein[]
+
+  @@index([azubiId], map: "idx_pruefung_azubi_id")
+  @@index([typ], map: "idx_pruefung_typ")
+  @@index([status], map: "idx_pruefung_status")
+  @@map("pruefungen")
+}
+
+model PruefungsMeilenstein {
+  id              String    @id @default(uuid())
+  pruefungId      String    @map("pruefung_id")
+  titel           String
+  beschreibung    String?
+  faelligAm       DateTime? @map("faellig_am")
+  erledigt        Boolean   @default(false)
+  erledigtAm      DateTime? @map("erledigt_am")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  pruefung Pruefung @relation(fields: [pruefungId], references: [id], onDelete: Cascade)
+
+  @@index([pruefungId], map: "idx_pm_pruefung_id")
+  @@map("pruefungs_meilensteine")
+}
+
+enum NotificationCategory {
+  review
+  deadline
+  reminder
+  absence
+  system
+}
+
+enum NotificationPriority {
+  low
+  medium
+  high
+}
+
+model Notification {
+  id              String                @id @default(uuid())
+  userId          String                @map("user_id")
+  category        NotificationCategory
+  title           String
+  message         String
+  priority        NotificationPriority  @default(medium)
+  readAt          DateTime?             @map("read_at")
+  acknowledgedAt  DateTime?             @map("acknowledged_at")
+  referenceType   String?               @map("reference_type")
+  referenceId     String?               @map("reference_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt], map: "idx_notifications_user_created")
+  @@map("notifications")
+}
+
+model NotificationPreference {
+  id        String                @id @default(uuid())
+  userId    String                @map("user_id")
+  category  NotificationCategory
+  inApp     Boolean               @default(true) @map("in_app")
+  email     Boolean               @default(false)
+  teams     Boolean               @default(false)
+  createdAt DateTime              @default(now()) @map("created_at")
+  updatedAt DateTime              @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category], map: "uq_notification_preference_user_category")
+  @@index([userId], map: "idx_notification_preference_user_id")
+  @@map("notification_preferences")
+}
+
+enum DatenschutzRequestTyp {
+  access
+  export
+  deletion
+  rectification
+  restriction
+  portability
+  objection
+}
+
+enum DatenschutzRequestStatus {
+  open
+  in_progress
+  completed
+  rejected
+}
+
+model DatenschutzRequest {
+  id          String                     @id @default(uuid())
+  userId      String                     @map("user_id")
+  typ         DatenschutzRequestTyp
+  status      DatenschutzRequestStatus   @default(open)
+  details     String?
+  requestedAt DateTime                   @default(now()) @map("requested_at")
+  dueDate     DateTime?                  @map("due_date")
+  completedAt DateTime?                  @map("completed_at")
+  result      String?
+  processedBy String?                    @map("processed_by")
+  createdAt   DateTime                   @default(now()) @map("created_at")
+  updatedAt   DateTime                   @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_datenschutz_request_user_id")
+  @@index([status], map: "idx_datenschutz_request_status")
+  @@map("datenschutz_requests")
+}
+
+enum ConsentAction {
+  granted
+  revoked
+}
+
+model Consent {
+  id         String       @id @default(uuid())
+  userId     String       @map("user_id")
+  key        String
+  version    String       @default("1")
+  text       String?
+  grantedAt  DateTime     @default(now()) @map("granted_at")
+  revokedAt  DateTime?    @map("revoked_at")
+  ipAddress  String?      @map("ip_address")
+  source     String?      @default("ui")
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_consent_user_id")
+  @@unique([userId, key, version], map: "uq_consent_user_key_version")
+  @@map("consents")
+}
+
+model ConsentLog {
+  id        String        @id @default(uuid())
+  userId    String        @map("user_id")
+  key       String
+  version   String
+  action    ConsentAction
+  text      String?
+  ipAddress String?       @map("ip_address")
+  source    String?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_consent_log_user_id")
+  @@map("consent_logs")
+}
+
+enum LegalBasisArticle {
+  art6_1_a
+  art6_1_b
+  art6_1_c
+  art6_1_f
+}
+
+model LegalBasis {
+  id              String            @id @default(uuid())
+  title           String
+  purpose         String
+  dataCategories  String[]          @map("data_categories")
+  recipients      String[]
+  retentionPeriod String?           @map("retention_period")
+  legalBasis      LegalBasisArticle @map("legal_basis")
+  controller      String?
+  active          Boolean           @default(true)
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+
+  @@map("legal_bases")
+}
+
+enum DpiaRisk {
+  low
+  medium
+  high
+}
+
+enum DpiaStatus {
+  open
+  in_progress
+  completed
+}
+
+model DpiaEntry {
+  id          String     @id @default(uuid())
+  title       String
+  description String?
+  riskLevel   DpiaRisk   @default(low) @map("risk_level")
+  measures    String?
+  status      DpiaStatus @default(open)
+  assessedAt  DateTime?  @map("assessed_at")
+  assessedBy  String?    @map("assessed_by")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  @@index([status], map: "idx_dpia_entry_status")
+  @@map("dpia_entries")
+}
+
+// ===== concept2.md extensions =====
+enum Ausbildungsberuf {
+  systemintegration
+  anwendungsentwicklung
+  daten_prozessanalyse
+  digitale_vernetzung
+  fachinformatiker
+  elektroniker
+  industriemechaniker
+  mechatroniker
+  zerspanungsmechaniker
+  konstruktionsmechaniker
+  werkzeugmechaniker
+  automotive_mechaniker
+  kfz_mechaniker
+  landwirt
+  forstwirt
+  gärtner
+  tischler
+  steinmetz
+  maler
+  glaser
+  sanitär_heizung_klimatechnik
+  elektronik_elektronik
+  IT_systemelektroniker
+  pharmazeutisch_technischer_assistent
+  medizinisch_technischer_assistent
+  biologe
+  chemielaborant
+  lebensmittelchemiker
+  lebensmitteltechnologe
+  banker
+  kaufmann_für_bankwirtschaft
+  kaufmann_für_spedition_logistik
+  kaufmann_für_marketingkommunikation
+  kaufmann_für_digitalmanagement
+  kaufmann_für_versicherungen
+  industriekaufmann
+  bankkaufmann
+  sparkassenkaufmann
+  steuerfachangestellter
+  steuerfachwirt
+  wirtschaftsprüfer
+  controller
+  bilanzbuchhalter
+  personalreferent
+  personalkaufmann
+  vertriebskaufmann
+  kaufmann_für_einzelhandel
+  kaufmann_für_spedition
+  kaufmann_für_lagerlogistik
+  kaufmann_für_marketing
+  kaufmann_für_digitalisierung
+  kaufmann_für_cybersicherheit
+  kaufmann_für_kI
+  kaufmann_für_data_science
+  kaufmann_für_webentwicklung
+  kaufmann_für_gamedesign
+  kaufmann_für_medientechnik
+  kaufmann_für_fotografie
+  kaufmann_für_video_produktion
+  kaufmann_für_audio_technik
+  kaufmann_für_tischlerei
+  kaufmann_für_metallgestaltung
+  kaufmann_für_glasgestaltung
+  kaufmann_für_keramik
+  kaufmann_für_textilgestaltung
+  kaufmann_für_goldschmied
+  kaufmann_für_juwelier
+  kaufmann_für_pflege
+  kaufmann_für_ergotherapie
+  kaufmann_für_physiotherapie
+  kaufmann_für_logopädie
+  kaufmann_für_heilerziehungspflege
+  kaufmann_für_soziale_pflege
+  kaufmann_für_altenpflege
+  kaufmann_für_krankenpflege
+  kaufmann_für_pflegewissenschaften
+}
+enum AusbildungsplanStatus {
+  entwurf
+  eingereicht
+  geprueft
+  genehmigt
+}
+enum VertragsStatus {
+  aktiv
+  beendet
+  archiviert
+}
+enum ErziehungsBezug {
+  elternteil
+  betreuer
+  anderer
+}
+enum UebernahmeErgebnis {
+  geplant
+  geblockt
+  abgeschlossen
+  widerrufen
+}
+enum FeedbackGespraechTyp {
+  regelmaessig
+  anlassbezogen
+  probezeit
+  uebernahme
+}
+enum FeedbackGespraechStatus {
+  geplant
+  durchgefuehrt
+  dokumentiert
+  nachverfolgt
+}
+enum VereinbarungStatus {
+  offen
+  erledigt
+}
+enum FoerderMassnahme {
+  nachhilfe
+  gespraech
+  andere
+}
+
+enum SkillStatus {
+  nicht_begonnen
+  in_arbeit
+  vermittelt
+}
+
+enum LernpfadPrioritaet {
+  hoch
+  mittel
+  niedrig
+}
+
+model Ausbildungsplan {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  ausbilderId String @map("ausbilder_id")
+  beruf Ausbildungsberuf
+  jahr Int
+  inhalte Json?
+  status AusbildungsplanStatus @default(entwurf)
+  anhangUrl String? @map("anhang_url")
+  gueltigVon DateTime? @map("gueltig_von")
+  gueltigBis DateTime? @map("gueltig_bis")
+  geprueftVon String? @map("geprueft_von")
+   geprueftAm DateTime? @map("geprueft_am")
+   rahmenlehrplanId String? @map("rahmenlehrplan_id")
+   createdAt DateTime @default(now()) @map("created_at")
+   updatedAt DateTime @updatedAt @map("updated_at")
+   azubi User @relation("AusbildungsplanAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+   ausbilder User @relation("AusbildungsplanAusbilder", fields:[ausbilderId], references:[id])
+   @@index([azubiId])
+   @@map("ausbildungsplaene")
+}
+model Ausbildungsvertrag {
+  id String @id @default(uuid())
+  azubiId String @unique @map("azubi_id")
+  beruf Ausbildungsberuf @map("ausbildungsberuf")
+  startdatum DateTime @map("startdatum")
+  enddatum DateTime @map("enddatum")
+  probezeitMonate Int @default(4) @map("probezeit_monate")
+  dauerMonate Int @map("dauer_monate")
+  verkuerzungMonate Int? @map("verkuerzung_monate")
+  verlaengerungGrund String? @map("verlaengerung_grund")
+  vertragsUrl String? @map("vertrags_url")
+  status VertragsStatus @default(aktiv)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@map("ausbildungsvertraege")
+}
+model Erziehungsberechtigter {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  name String
+  bezug ErziehungsBezug
+  email String?
+  telefon String?
+  berechtigungen String[] @default([])
+  aktiv Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("erziehungsberechtigte")
+}
+model ReportTemplate {
+  id String @id @default(uuid())
+  beruf Ausbildungsberuf
+  jahr Int
+  name String
+  felder Json
+  istStandard Boolean @default(false) @map("ist_standard")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("report_templates")
+}
+model ReportAttachment {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  typ String
+  dateiUrl String @map("datei_url")
+  kommentar String?
+  erstelltVon String? @map("erstellt_von")
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@index([reportId])
+  @@map("report_attachments")
+}
+model ReportVersion {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  version Int
+  inhaltMarkdown String @map("inhalt_markdown")
+  erstelltVon String? @map("erstellt_von")
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@unique([reportId, version])
+  @@map("report_versions")
+}
+model ReportTimeEntry {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  taskId String? @map("task_id")
+  stunden Float
+  kommentar String?
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@index([reportId])
+  @@map("report_time_entries")
+}
+model FeedbackGespraech {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  durchgefuehrtVonId String @map("durchgefuehrt_von_id")
+  typ FeedbackGespraechTyp
+  status FeedbackGespraechStatus @default(geplant)
+  termin DateTime?
+  durchgefuehrtAm DateTime? @map("durchgefuehrt_am")
+  ziele String?
+  verlaufsnotiz String? @map("verlaufsnotiz")
+  sichtbarkeitAzubi Boolean @default(true) @map("sichtbarkeit_azubi")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  azubi User @relation("FeedbackGespraechAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  durchgefuehrtVon User @relation("FeedbackGespraechDurchfuehrer", fields:[durchgefuehrtVonId], references:[id])
+  vereinbarungen GespraechVereinbarung[]
+  @@index([azubiId])
+  @@map("feedback_gespraeche")
+}
+model GespraechVereinbarung {
+  id String @id @default(uuid())
+  gespraechId String @map("gespraech_id")
+  text String
+  faelligAm DateTime? @map("faellig_am")
+  status VereinbarungStatus @default(offen)
+  createdAt DateTime @default(now()) @map("created_at")
+  gespraech FeedbackGespraech @relation(fields:[gespraechId], references:[id], onDelete:Cascade)
+  @@index([gespraechId])
+  @@map("gespraech_vereinbarungen")
+}
+model GradeEntry {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  fach String
+  halbjahr String?
+  note Float
+  datum DateTime?
+  pruefungsart String?
+  gewichtung Float?
+  zeugnisUrl String? @map("zeugnis_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("GradeEntryAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("grade_entries")
+}
+model Foerderbedarf {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  gradeEntryId String? @map("grade_entry_id")
+  massnahme FoerderMassnahme
+  beschreibung String?
+  durchgefuehrtVon String? @map("durchgefuehrt_von")
+  durchgefuehrtAm DateTime? @map("durchgefuehrt_am")
+  ergebnis String?
+  nachverfolgungAm DateTime? @map("nachverfolgung_am")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("FoerderbedarfAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("foerderbedarfe")
+}
+model Berufsschule {
+  id String @id @default(uuid())
+  name String
+  adresse String?
+  klasse String?
+  klassenlehrer String?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("berufsschulen")
+}
+model UebernahmeGespraech {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  hrId String? @map("hr_id")
+  termin DateTime?
+  ergebnis UebernahmeErgebnis @default(geplant)
+  notizen String?
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("UebernahmeAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("uebernahme_gespraeche")
+}
+model Alumni {
+  id String @id @default(uuid())
+  azubiId String @unique @map("azubi_id")
+  austrittAm DateTime @map("austritt_am")
+  loeschungAm DateTime? @map("loeschung_am")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@map("alumni")
+}
+model Versetzungswunsch {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  wunschAbteilungen String[] @map("wunsch_abteilungen")
+  begruendung String?
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("versetzungswuensche")
+}
+model LlmQuota {
+  id String @id @default(uuid())
+  userId String? @map("user_id")
+  modell String
+  limitPerHour Int @map("limit_per_hour")
+  used Int @default(0)
+  resetAt DateTime @map("reset_at")
+  @@map("llm_quotas")
+}
+model SearchIndex {
+  id String @id @default(uuid())
+  entityType String @map("entity_type")
+  entityId String @map("entity_id")
+  titel String
+  inhalt String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([entityType])
+  @@map("search_index")
+}
+
+model SkillAssignment {
+  id            String      @id @default(uuid())
+  azubiId       String      @map("azubi_id")
+  frameworkId   String      @map("framework_id")
+  courseId      String?     @map("course_id")
+  status        SkillStatus @default(nicht_begonnen)
+  fortschritt   Int         @default(0)
+  vermitteltVon String?     @map("vermittelt_von")
+  vermitteltAm  DateTime?   @map("vermittelt_am")
+  bemerkungen   String?
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+
+  azubi     User      @relation("SkillAssignmentAzubi", fields: [azubiId], references: [id], onDelete: Cascade)
+  framework Framework @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
+  course    Course?   @relation(fields: [courseId], references: [id], onDelete: SetNull)
+
+  @@unique([azubiId, frameworkId])
+  @@index([azubiId], map: "idx_skill_assignment_azubi_id")
+  @@index([frameworkId], map: "idx_skill_assignment_framework_id")
+  @@index([status], map: "idx_skill_assignment_status")
+  @@map("skill_assignments")
+}
+
+model SkillMatrixBenchmark {
+  id                        String   @id @default(uuid())
+  jahrgang                  Int      @map("jahrgang")
+  beruf                     String   @map("beruf")
+  lernfeldId                String   @map("lernfeld_id")
+  durchschnittNote          Float    @map("durchschnitt_note")
+  durchschnittAbdeckungProzent Float @map("durchschnitt_abdeckung_prozent")
+  durchschnittFortschritt   Float    @map("durchschnitt_fortschritt")
+  azubiAnzahl               Int      @map("azubi_anzahl")
+  berechnetAm               DateTime @default(now()) @map("berechnet_am")
+
+  lernfeld Framework @relation(fields: [lernfeldId], references: [id], onDelete: Cascade)
+
+  @@unique([jahrgang, beruf, lernfeldId])
+  @@index([jahrgang, beruf], map: "idx_benchmark_jahrgang_beruf")
+  @@index([lernfeldId], map: "idx_benchmark_lernfeld_id")
+  @@map("skill_matrix_benchmarks")
+}
+
+model Lernpfad {
+  id              String             @id @default(uuid())
+  azubiId         String             @map("azubi_id")
+  courseId        String             @map("course_id")
+  prioritaet      LernpfadPrioritaet @default(mittel)
+  skipBegründung  String?            @map("skip_begründung")
+  ausgeschlossen  Boolean            @default(false) @map("ausgeschlossen")
+  erstelltVon     String             @map("erstellt_von")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  azubi    User   @relation("LernpfadAzubi", fields: [azubiId], references: [id], onDelete: Cascade)
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  ersteller User  @relation("LernpfadErsteller", fields: [erstelltVon], references: [id], onDelete: Cascade)
+
+  @@unique([azubiId, courseId])
+  @@index([azubiId], map: "idx_lernpfad_azubi_id")
+  @@index([courseId], map: "idx_lernpfad_course_id")
+  @@map("lernpfad")
+}
+
+model Standort {
+   id        String   @id @default(uuid())
+   name      String
+   adresse   String?
+   plz       String?
+   ort       String?
+   createdAt DateTime @default(now()) @map("created_at")
+   updatedAt DateTime @updatedAt @map("updated_at")
+
+   @@map("standorte")
+}
+
+model Tag {
+   id        String   @id @default(uuid())
+   name      String
+   typ       String
+   createdAt DateTime @default(now()) @map("created_at")
+   updatedAt DateTime @updatedAt @map("updated_at")
+
+   @@map("tags")
+}
+
+model Kompetenzprofil {
+   id           String   @id @default(uuid())
+   azubiId      String   @map("azubi_id")
+   fachkompetenzen String[]
+   sozialkompetenzen String[]
+   staerken     String[]
+   schwaechen   String[]
+   erstelltAm   DateTime @default(now()) @map("erstellt_am")
+   updatedAt    DateTime @updatedAt @map("updated_at")
+
+   @@index([azubiId])
+   @@map("kompetenzprofile")
+}
+
+model Schnittstellenkonfiguration {
+   id               String   @id @default(uuid())
+   name             String
+   systemTyp        String
+   oauth2Config     String?
+   webhookConfig    String?
+   status           String   @default("aktiv")
+   erstelltAm       DateTime @default(now()) @map("erstellt_am")
+   updatedAt        DateTime @updatedAt @map("updated_at")
+
+   @@map("schnittstellenkonfigurationen")
+}
+
+model Ausbildungsnachweis {
+   id               String   @id @default(uuid())
+   azubiId          String   @map("azubi_id")
+   titel            String
+   inhaltMarkdown   String   @map("inhalt_markdown")
+   status           String   @default("entwurf")
+   signiertVon      String?  @map("signiert_von")
+   signiertAm       DateTime? @map("signiert_am")
+   archiviertAm     DateTime? @map("archiviert_am")
+   rahmenlehrplanId String?  @map("rahmenlehrplan_id")
+   erstelltAm       DateTime @default(now()) @map("erstellt_am")
+   updatedAt        DateTime @updatedAt @map("updated_at")
+
+   @@index([azubiId])
+   @@index([status])
+   @@map("ausbildungsnachweise")
+}
+
+model Lernpfad {
+   id             String   @id @default(uuid())
+   azubiId        String   @map("azubi_id")
+   courseId       String?  @map("course_id")
+   prioritaet     String   @default("mittel")
+   skipBegruendung String?
+   erstelltAm     DateTime @default(now()) @map("erstellt_am")
+   updatedAt      DateTime @updatedAt @map("updated_at")
+
+   @@map("lernpfade")
+}
+
+model Pruefungssimulation {
+   id          String   @id @default(uuid())
+   beruf       String
+   typ         String
+   aufgaben    String[]
+   loesungen   String[]
+   bewertung   String?
+   erstelltAm  DateTime @default(now()) @map("erstellt_am")
+   updatedAt   DateTime @updatedAt @map("updated_at")
+
+   @@map("pruefungssimulationen")
+}
+
+model LernzeitTracker {
+   id                  String   @id @default(uuid())
+   azubiId            String   @map("azubi_id")
+   courseId           String?  @map("course_id")
+   lektionId          String?  @map("lektion_id")
+   durchgehendVerbracht DateTime? @map("durchgehend_verbracht")
+   aktivitaetstyp     String
+   erstelltAm         DateTime @default(now()) @map("erstellt_am")
+   updatedAt          DateTime @updatedAt @map("updated_at")
+
+   @@map("lernzeit_tracker")
+}
+
+model Kompetenzabdeckung {
+   id             String   @id @default(uuid())
+   azubiId        String   @map("azubi_id")
+   lernfeldId     String?  @map("lernfeld_id")
+   sollStunden    Float
+   istStunden     Float
+   deckungProzent Float
+   erstelltAm     DateTime @default(now()) @map("erstellt_am")
+   updatedAt      DateTime @updatedAt @map("updated_at")
+
+   @@map("kompetenzabdeckung")
+}
+
+model Eskalation {
+   id               String   @id @default(uuid())
+   reportId         String   @map("report_id")
+   stufe            Int
+   triggermail      Boolean  @default(false) @map("triggermail")
+   manuelleEskalation Boolean @default(false) @map("manuelle_eskalation")
+   erstelltAm       DateTime @default(now()) @map("erstellt_am")
+   updatedAt        DateTime @updatedAt @map("updated_at")
+
+   @@map("eskaliungen")
+}
+
+model Abteilungsuebergabe {
+    id                   String   @id @default(uuid())
+   vonEinsatzId         String? @map("von_einsatz_id")
+   bisEinsatzId         String? @map("bis_einsatz_id")
+   datum                DateTime?
+   wichtigeLernziele    String?
+   offenePunkte         String?
+   uebergabeprotokollUrl String? @map("uebergabeprotokoll_url")
+   erstelltAm           DateTime @default(now()) @map("erstellt_am")
+   updatedAt            DateTime @updatedAt @map("updated_at")
+
+   @@map("abteilungsuebergaben")
+}
+
+model Kapazitaetswarnung {
+   id               String   @id @default(uuid())
+   abteilungId      String   @map("abteilung_id")
+   jahr             Int
+   planAusbilder    Int
+   tatsaechlicheAusbilder Int
+   warnSchwelle     Int
+   status           String   @default("OK")
+   erstelltAm       DateTime @default(now()) @map("erstellt_am")
+   updatedAt        DateTime @updatedAt @map("updated_at")
+
+   @@map("kapazitaetswarnungen")
+}
+
+model Mentoring {
+   id          String   @id @default(uuid())
+   pateId      String   @map("pate_id")
+   mentoriId   String   @map("mentori_id")
+   jahrgang    Int?
+   rollen      String[]
+   aktiv       Boolean  @default(true)
+   zugewiesenAm DateTime @default(now()) @map("zugewiesen_am")
+   beendetAm   DateTime?
+   erstelltAm  DateTime @default(now()) @map("erstellt_am")
+   updatedAt   DateTime @updatedAt @map("updated_at")
+
+   @@map("mentoring")
+}
+
+model FAQ {
+   id          String   @id @default(uuid())
+   frage       String
+   antwort     String
+   quelleId    String?  @map("quelle_id")
+   aktualisiertVon String?
+   aktualisiertAm DateTime?
+   erstelltAm  DateTime @default(now()) @map("erstellt_am")
+   updatedAt   DateTime @updatedAt @map("updated_at")
+
+   @@map("faqs")
+}
+
+model CustomCourse {
+   id              String   @id @default(uuid())
+   ausbilderId     String   @map("ausbilder_id")
+   titel           String
+   beschreibung    String?
+   inhalt          String?
+   verantwortlichkeiten String[]
+   freigegeben     Boolean  @default(false)
+   erstelltAm      DateTime @default(now()) @map("erstellt_am")
+   genehmigtVon    String?  @map("genehmigt_von")
+   updatedAt       DateTime @updatedAt @map("updated_at")
+
+   @@map("custom_courses")
+}

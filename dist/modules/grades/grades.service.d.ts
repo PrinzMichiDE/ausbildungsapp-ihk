@@ -1,0 +1,173 @@
+import { PrismaService } from '../../database/prisma.service.js';
+import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
+import { CurrentUser } from '../../common/decorators/current-user.type.js';
+import { CreateGradeDto, GradeResponseDto, GradeVersionResponseDto } from './dto/grade.dto.js';
+export declare class NotenService {
+    private readonly prisma;
+    private readonly scope;
+    constructor(prisma: PrismaService, scope: AccessScopeService);
+    getVersions(id: string, currentUser: CurrentUser): Promise<GradeVersionResponseDto[]>;
+    getDiff(id: string, currentUser: CurrentUser, v1: number, v2: number): Promise<{
+        v1: string;
+        v2: string;
+    }>;
+    getGPA(azubiId: string, currentUser: CurrentUser): Promise<{
+        gesamt: number;
+        erstesHalbjahr: number | null;
+        zweitesHalbjahr: number | null;
+        anzahlNoten: number;
+    }>;
+    getDashboard(currentUser: CurrentUser, filter?: {
+        fach?: string;
+        halbjahr?: any;
+        zeitraum?: string;
+    }): Promise<{
+        zusammenfassung: {
+            insgesamt: number;
+            nachStatus: Record<string, number>;
+            nachFach: Record<string, number>;
+        };
+        noten: {
+            id: string;
+            azubiId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            typ: import("@prisma/client").$Enums.GradeTyp;
+            status: import("@prisma/client").$Enums.GradeStatus;
+            beschreibung: string | null;
+            fach: string;
+            note: number;
+            zeitraum: string;
+            halbjahr: import("@prisma/client").$Enums.Halbjahr | null;
+            datum: Date | null;
+            pruefungsart: import("@prisma/client").$Enums.Pruefungsart | null;
+            gewichtung: number | null;
+            gewichtungsKategorie: import("@prisma/client").$Enums.Gewichtungskategorie | null;
+            bemerkungen: string | null;
+            prueferId: string | null;
+            pruefungsdatum: Date | null;
+            wiederholung: boolean;
+            maßnahme: string | null;
+            zeugnisUrl: string | null;
+            quellenUrl: string | null;
+            kursId: string | null;
+            bewertetVon: string | null;
+            bewertetAm: Date | null;
+            bewertung: string | null;
+        }[];
+    }>;
+    getWarnliste(currentUser: CurrentUser): Promise<{
+        kritisch: {
+            warnstufe: string;
+            id: string;
+            azubiId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            typ: import("@prisma/client").$Enums.GradeTyp;
+            status: import("@prisma/client").$Enums.GradeStatus;
+            beschreibung: string | null;
+            fach: string;
+            note: number;
+            zeitraum: string;
+            halbjahr: import("@prisma/client").$Enums.Halbjahr | null;
+            datum: Date | null;
+            pruefungsart: import("@prisma/client").$Enums.Pruefungsart | null;
+            gewichtung: number | null;
+            gewichtungsKategorie: import("@prisma/client").$Enums.Gewichtungskategorie | null;
+            bemerkungen: string | null;
+            prueferId: string | null;
+            pruefungsdatum: Date | null;
+            wiederholung: boolean;
+            maßnahme: string | null;
+            zeugnisUrl: string | null;
+            quellenUrl: string | null;
+            kursId: string | null;
+            bewertetVon: string | null;
+            bewertetAm: Date | null;
+            bewertung: string | null;
+        }[];
+        warnung: {
+            warnstufe: string;
+            id: string;
+            azubiId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            typ: import("@prisma/client").$Enums.GradeTyp;
+            status: import("@prisma/client").$Enums.GradeStatus;
+            beschreibung: string | null;
+            fach: string;
+            note: number;
+            zeitraum: string;
+            halbjahr: import("@prisma/client").$Enums.Halbjahr | null;
+            datum: Date | null;
+            pruefungsart: import("@prisma/client").$Enums.Pruefungsart | null;
+            gewichtung: number | null;
+            gewichtungsKategorie: import("@prisma/client").$Enums.Gewichtungskategorie | null;
+            bemerkungen: string | null;
+            prueferId: string | null;
+            pruefungsdatum: Date | null;
+            wiederholung: boolean;
+            maßnahme: string | null;
+            zeugnisUrl: string | null;
+            quellenUrl: string | null;
+            kursId: string | null;
+            bewertetVon: string | null;
+            bewertetAm: Date | null;
+            bewertung: string | null;
+        }[];
+        gut: {
+            warnstufe: string;
+            id: string;
+            azubiId: string;
+            createdAt: Date;
+            updatedAt: Date;
+            typ: import("@prisma/client").$Enums.GradeTyp;
+            status: import("@prisma/client").$Enums.GradeStatus;
+            beschreibung: string | null;
+            fach: string;
+            note: number;
+            zeitraum: string;
+            halbjahr: import("@prisma/client").$Enums.Halbjahr | null;
+            datum: Date | null;
+            pruefungsart: import("@prisma/client").$Enums.Pruefungsart | null;
+            gewichtung: number | null;
+            gewichtungsKategorie: import("@prisma/client").$Enums.Gewichtungskategorie | null;
+            bemerkungen: string | null;
+            prueferId: string | null;
+            pruefungsdatum: Date | null;
+            wiederholung: boolean;
+            maßnahme: string | null;
+            zeugnisUrl: string | null;
+            quellenUrl: string | null;
+            kursId: string | null;
+            bewertetVon: string | null;
+            bewertetAm: Date | null;
+            bewertung: string | null;
+        }[];
+        gesamt: number;
+    }>;
+    create(currentUser: CurrentUser, dto: CreateGradeDto): Promise<GradeResponseDto>;
+    findAll(currentUser: CurrentUser): Promise<GradeResponseDto[]>;
+    findOne(id: string, currentUser: CurrentUser): Promise<GradeResponseDto>;
+    remove(id: string, currentUser: CurrentUser): Promise<void>;
+    confirm(id: string, currentUser: CurrentUser): Promise<GradeResponseDto>;
+    visieren(id: string, currentUser: CurrentUser): Promise<GradeResponseDto>;
+    archivieren(id: string, currentUser: CurrentUser): Promise<GradeResponseDto>;
+    bewerten(id: string, currentUser: CurrentUser, dto: {
+        bewertung: string;
+        pruefungsdatum?: Date;
+    }): Promise<GradeResponseDto>;
+    zeugnisUpload(id: string, currentUser: CurrentUser, dto: {
+        zeugnisUrl: string;
+    }): Promise<GradeResponseDto>;
+    wiederholung(id: string, currentUser: CurrentUser, dto: {
+        maßnahme?: string;
+    }): Promise<GradeResponseDto>;
+    addMaßnahme(id: string, currentUser: CurrentUser, dto: {
+        maßnahme: string;
+    }): Promise<GradeResponseDto>;
+    private scopeWhere;
+    private canManage;
+    private toResponse;
+    private toVersionResponse;
+}

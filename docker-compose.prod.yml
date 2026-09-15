@@ -1,0 +1,100 @@
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: nextgen-traefik
+    restart: unless-stopped
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--log.level=INFO"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certs:/letsencrypt
+    networks:
+      - traefik-proxy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nextgen-app
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - DATABASE_URL=postgresql://app:${DB_PASSWORD}@db:5432/nextgen
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_ACCESS_EXPIRES_IN=${JWT_ACCESS_EXPIRES_IN:-15m}
+      - JWT_REFRESH_EXPIRES_IN=${JWT_REFRESH_EXPIRES_IN:-7d}
+      - AI_PROVIDER=${AI_PROVIDER:-ollama}
+      - AI_BASE_URL=${AI_BASE_URL:-http://ollama:11434}
+      - AI_API_KEY=${AI_API_KEY:-}
+      - AI_MODEL=${AI_MODEL:-llama3.1}
+      - AI_EMBEDDING_MODEL=${AI_EMBEDDING_MODEL:-nomic-embed-text}
+      - AI_EMBEDDING_DIMENSIONS=${AI_EMBEDDING_DIMENSIONS:-768}
+      - TEAMS_WEBHOOK_URL=${TEAMS_WEBHOOK_URL:-}
+      - CORS_ORIGINS=${CORS_ORIGINS:-https://app.example.com}
+      - BCRYPT_ROUNDS=${BCRYPT_ROUNDS:-12}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.app.rule=Host(`${APP_DOMAIN:-api.example.com}`)"
+      - "traefik.http.routers.app.entrypoints=websecure"
+      - "traefik.http.routers.app.tls=true"
+      - "traefik.http.routers.app.tls.certresolver=letsencrypt"
+      - "traefik.http.services.app.loadbalancer.server.port=3000"
+      - "traefik.http.services.app.loadbalancer.healthcheck.path=/api/v1/health"
+      - "traefik.http.services.app.loadbalancer.healthcheck.interval=30s"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - traefik-proxy
+      - internal
+
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: nextgen-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: nextgen
+    volumes:
+      - nextgen-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d nextgen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - internal
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: nextgen-ollama
+    restart: unless-stopped
+    volumes:
+      - ollama-data:/root/.ollama
+    networks:
+      - internal
+
+volumes:
+  nextgen-db-data:
+  ollama-data:
+  traefik-certs:
+
+networks:
+  traefik-proxy:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true

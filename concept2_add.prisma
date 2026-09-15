@@ -1,0 +1,267 @@
+// ===== concept2.md extensions =====
+enum Ausbildungsberuf {
+  systemintegration
+  anwendungsentwicklung
+  daten_prozessanalyse
+  digitale_vernetzung
+}
+enum AusbildungsplanStatus {
+  entwurf
+  eingereicht
+  geprueft
+  genehmigt
+}
+enum VertragsStatus {
+  aktiv
+  beendet
+  archiviert
+}
+enum ErziehungsBezug {
+  elternteil
+  betreuer
+  anderer
+}
+enum UebernahmeErgebnis {
+  geplant
+  geblockt
+  abgeschlossen
+  widerrufen
+}
+enum FeedbackGespraechTyp {
+  regelmaessig
+  anlassbezogen
+  probezeit
+  uebernahme
+}
+enum FeedbackGespraechStatus {
+  geplant
+  durchgefuehrt
+  dokumentiert
+  nachverfolgt
+}
+enum VereinbarungStatus {
+  offen
+  erledigt
+}
+enum FoerderMassnahme {
+  nachhilfe
+  gespraech
+  andere
+}
+
+model Ausbildungsplan {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  ausbilderId String @map("ausbilder_id")
+  beruf Ausbildungsberuf
+  jahr Int
+  inhalte Json?
+  status AusbildungsplanStatus @default(entwurf)
+  anhangUrl String? @map("anhang_url")
+  gueltigVon DateTime? @map("gueltig_von")
+  gueltigBis DateTime? @map("gueltig_bis")
+  geprueftVon String? @map("geprueft_von")
+  geprueftAm DateTime? @map("geprueft_am")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  azubi User @relation("AusbildungsplanAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  ausbilder User @relation("AusbildungsplanAusbilder", fields:[ausbilderId], references:[id])
+  @@index([azubiId])
+  @@map("ausbildungsplaene")
+}
+model Ausbildungsvertrag {
+  id String @id @default(uuid())
+  azubiId String @unique @map("azubi_id")
+  beruf Ausbildungsberuf @map("ausbildungsberuf")
+  startdatum DateTime @map("startdatum")
+  enddatum DateTime @map("enddatum")
+  probezeitMonate Int @default(4) @map("probezeit_monate")
+  dauerMonate Int @map("dauer_monate")
+  verkuerzungMonate Int? @map("verkuerzung_monate")
+  verlaengerungGrund String? @map("verlaengerung_grund")
+  vertragsUrl String? @map("vertrags_url")
+  status VertragsStatus @default(aktiv)
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@map("ausbildungsvertraege")
+}
+model Erziehungsberechtigter {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  name String
+  bezug ErziehungsBezug
+  email String?
+  telefon String?
+  berechtigungen String[] @default([])
+  aktiv Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("erziehungsberechtigte")
+}
+model ReportTemplate {
+  id String @id @default(uuid())
+  beruf Ausbildungsberuf
+  jahr Int
+  name String
+  felder Json
+  istStandard Boolean @default(false) @map("ist_standard")
+  version Int @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("report_templates")
+}
+model ReportAttachment {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  typ String
+  dateiUrl String @map("datei_url")
+  kommentar String?
+  erstelltVon String? @map("erstellt_von")
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@index([reportId])
+  @@map("report_attachments")
+}
+model ReportVersion {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  version Int
+  inhaltMarkdown String @map("inhalt_markdown")
+  erstelltVon String? @map("erstellt_von")
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@unique([reportId, version])
+  @@map("report_versions")
+}
+model ReportTimeEntry {
+  id String @id @default(uuid())
+  reportId String @map("report_id")
+  taskId String? @map("task_id")
+  stunden Float
+  kommentar String?
+  createdAt DateTime @default(now()) @map("created_at")
+  report Report @relation(fields:[reportId], references:[id], onDelete:Cascade)
+  @@index([reportId])
+  @@map("report_time_entries")
+}
+model FeedbackGespraech {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  durchgefuehrtVonId String @map("durchgefuehrt_von_id")
+  typ FeedbackGespraechTyp
+  status FeedbackGespraechStatus @default(geplant)
+  termin DateTime?
+  durchgefuehrtAm DateTime? @map("durchgefuehrt_am")
+  ziele String?
+  verlaufsnotiz String? @map("verlaufsnotiz")
+  sichtbarkeitAzubi Boolean @default(true) @map("sichtbarkeit_azubi")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  azubi User @relation("FeedbackGespraechAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  durchgefuehrtVon User @relation("FeedbackGespraechDurchfuehrer", fields:[durchgefuehrtVonId], references:[id])
+  vereinbarungen GespraechVereinbarung[]
+  @@index([azubiId])
+  @@map("feedback_gespraeche")
+}
+model GespraechVereinbarung {
+  id String @id @default(uuid())
+  gespraechId String @map("gespraech_id")
+  text String
+  faelligAm DateTime? @map("faellig_am")
+  status VereinbarungStatus @default(offen)
+  createdAt DateTime @default(now()) @map("created_at")
+  gespraech FeedbackGespraech @relation(fields:[gespraechId], references:[id], onDelete:Cascade)
+  @@index([gespraechId])
+  @@map("gespraech_vereinbarungen")
+}
+model GradeEntry {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  fach String
+  halbjahr String?
+  note Float
+  datum DateTime?
+  pruefungsart String?
+  gewichtung Float?
+  zeugnisUrl String? @map("zeugnis_url")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("GradeEntryAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("grade_entries")
+}
+model Foerderbedarf {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  gradeEntryId String? @map("grade_entry_id")
+  massnahme FoerderMassnahme
+  beschreibung String?
+  durchgefuehrtVon String? @map("durchgefuehrt_von")
+  durchgefuehrtAm DateTime? @map("durchgefuehrt_am")
+  ergebnis String?
+  nachverfolgungAm DateTime? @map("nachverfolgung_am")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("FoerderbedarfAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("foerderbedarfe")
+}
+model Berufsschule {
+  id String @id @default(uuid())
+  name String
+  adresse String?
+  klasse String?
+  klassenlehrer String?
+  createdAt DateTime @default(now()) @map("created_at")
+  @@map("berufsschulen")
+}
+model UebernahmeGespraech {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  hrId String? @map("hr_id")
+  termin DateTime?
+  ergebnis UebernahmeErgebnis @default(geplant)
+  notizen String?
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation("UebernahmeAzubi", fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("uebernahme_gespraeche")
+}
+model Alumni {
+  id String @id @default(uuid())
+  azubiId String @unique @map("azubi_id")
+  austrittAm DateTime @map("austritt_am")
+  loeschungAm DateTime? @map("loeschung_am")
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@map("alumni")
+}
+model Versetzungswunsch {
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  wunschAbteilungen String[] @map("wunsch_abteilungen")
+  begruendung String?
+  createdAt DateTime @default(now()) @map("created_at")
+  azubi User @relation(fields:[azubiId], references:[id], onDelete:Cascade)
+  @@index([azubiId])
+  @@map("versetzungswuensche")
+}
+model LlmQuota {
+  id String @id @default(uuid())
+  userId String? @map("user_id")
+  modell String
+  limitPerHour Int @map("limit_per_hour")
+  used Int @default(0)
+  resetAt DateTime @map("reset_at")
+  @@map("llm_quotas")
+}
+model SearchIndex {
+  id String @id @default(uuid())
+  entityType String @map("entity_type")
+  entityId String @map("entity_id")
+  titel String
+  inhalt String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([entityType])
+  @@map("search_index")
+}

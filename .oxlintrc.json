@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "ignorePatterns": ["node_modules", "dist", "coverage", "*.config.js", "prisma/seed.ts"],
+  "rules": {
+    "no-unused-vars": "warn",
+    "no-empty": "warn",
+    "no-console": "off"
+  }
+}

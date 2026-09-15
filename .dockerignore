@@ -1,0 +1,17 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.md
+.opencode
+.github
+test
+*.spec.ts
+*.e2e-spec.ts
+vitest.config.ts
+vitest.config.e2e.ts
+.prettierrc
+.oxlintrc.json

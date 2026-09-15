@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #f5f3ff;
+  --color-brand-100: #ede9fe;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-brand-700: #6d28d9;
+
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+  --color-info: #3b82f6;
+
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Fira Code', 'JetBrains Mono', ui-monospace, monospace;
+}
+
+:root {
+  --pv-primary: #7c3aed;
+  --pv-surface: #ffffff;
+  --pv-surface-alt: #f8fafc;
+  --pv-text: #1e293b;
+  --pv-text-secondary: #64748b;
+  --pv-border: #e2e8f0;
+  --pv-radius: 6px;
+}
+
+.dark {
+  --pv-primary: #a78bfa;
+  --pv-surface: #0f172a;
+  --pv-surface-alt: #1e293b;
+  --pv-text: #e2e8f0;
+  --pv-text-secondary: #94a3b8;
+  --pv-border: #334155;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 antialiased m-0;
+  }
+
+  ::-webkit-scrollbar {
+    @apply w-2 h-2;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-slate-300 dark:bg-slate-600 rounded-full;
+  }
+}
