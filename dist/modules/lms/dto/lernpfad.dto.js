@@ -7,10 +7,9 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var _a, _b;
 import { ApiProperty } from '@nestjs/swagger';
 import { IsUUID, IsEnum } from 'class-validator';
-import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums';
+import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums.js';
 export class CreateLernpfadDto {
     courseId;
     prioritaet;
@@ -24,7 +23,7 @@ __decorate([
 __decorate([
     ApiProperty({ enum: Prioritaet }),
     IsEnum(Prioritaet),
-    __metadata("design:type", typeof (_a = typeof Prioritaet !== "undefined" && Prioritaet) === "function" ? _a : Object)
+    __metadata("design:type", String)
 ], CreateLernpfadDto.prototype, "prioritaet", void 0);
 __decorate([
     ApiProperty({ required: false, example: true }),
@@ -46,7 +45,7 @@ __decorate([
 ], LernpfadResponseDto.prototype, "courseId", void 0);
 __decorate([
     ApiProperty({ enum: Prioritaet }),
-    __metadata("design:type", typeof (_b = typeof Prioritaet !== "undefined" && Prioritaet) === "function" ? _b : Object)
+    __metadata("design:type", String)
 ], LernpfadResponseDto.prototype, "prioritaet", void 0);
 __decorate([
     ApiProperty({ nullable: true }),

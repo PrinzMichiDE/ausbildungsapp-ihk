@@ -44,11 +44,12 @@ Alle fachlichen und technischen Entscheidungen folgen den Regeln in `.opencode/r
 | UI/UX Konzept | `ui-ux-concept.md` | Navigation, User Journeys, Interface Design, A11y, Pinia Stores, Theming |
 | UI/UX CSS-Konzept | `ui-ux-css-concept.md` | Tailwind-Architektur, PrimeVue Unstyled Mode, Design-Tokens, Dark Mode, Responsive |
 | **Dark & Light Mode** | `dark-light-mode.md` | **Immer erzwungen** — Dark- und Light-Modus muss bei jeder UI-Änderung funktionieren |
+| **@Design.md — Immer Verwenden** | `design-adhere.md` | **Immer erzwungen** — Brand-Design und Content-Regeln aus @Design.md |
 | UI/UX Enterprise | `ui-ux-enterprise.md` | Frontend-Design, PrimeVue, Accessibility, UX-Grundregeln |
 | Lizenz-Compliance | `license-compliance.md` | Abhängigkeiten, Lizenzen, Commercial-Free, Fremdcode |
 | **Zero-Trust & Defensive Security** | `zero-trust-security.md` | Immer erzwungen — Zero-Trust AuthZ, OWASP Top 10, DSGVO/GDPR, Supply-Chain, Audit-Logging |
 
-Vor jeder Änderung die passende Regel laden und beachten. Die Regeln `clean-code-refactoring.md`, `architecture-security-testing.md`, `zero-trust-security.md`, `dark-light-mode.md` und `git-auto-commit.md` sind **immer erzwungen** (unabhängig vom geänderten Dateityp). Bei neuen Endpoints zuerst die
+Vor jeder Änderung die passende Regel laden und beachten. Die Regeln `clean-code-refactoring.md`, `architecture-security-testing.md`, `zero-trust-security.md`, `dark-light-mode.md`, `design-adhere.md` und `git-auto-commit.md` sind **immer erzwungen** (unabhängig vom geänderten Dateityp). Bei neuen Endpoints zuerst die
 RBAC-Berechtigungsmatrix (§4) prüfen/ergänzen, bei Schema-Änderungen eine Migration im selben
 Commit erzeugen (`synchronize: false`).
 

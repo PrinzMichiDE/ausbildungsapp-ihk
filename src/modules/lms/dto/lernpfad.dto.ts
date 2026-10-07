@@ -1,6 +1,6 @@
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { IsUUID, IsEnum } from 'class-validator';
-import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums';
+import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums.js';
 
 export class CreateLernpfadDto {
   @ApiProperty({ example: 'course-uuid' })

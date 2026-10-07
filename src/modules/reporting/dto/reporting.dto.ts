@@ -1,25 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ReportStatus } from '@prisma/client';
+import { IsEnum, IsOptional, IsString, IsNumber, IsBoolean, IsUUID, IsDateString, Min, Max } from 'class-validator';
+import { GradeStatus, GradeTyp, Halbjahr, Gewichtungskategorie, Pruefungsart, ReportStatus } from '@prisma/client';
 
-export class ReportQuoteDto {
-  @ApiProperty()
-  azubiId: string;
+export class DashboardResult {
+  @ApiProperty({ description: 'Rollenbasierte Dashboard-Daten' })
+  role: string;
 
-  @ApiProperty()
-  name: string;
+  @ApiProperty({ description: 'KPI-Statistiken' })
+  stats: Record<string, number>;
 
-  @ApiProperty()
-  year: number;
-
-  @ApiProperty()
-  kalenderwochen: number;
-
-  @ApiProperty()
-  eingereicht: number;
-
-  @ApiProperty({ description: '0–1' })
-  quote: number;
+  @ApiProperty({ description: 'Frühwarnungen und Warnungen' })
+  warnings: any[];
 }
 
 export class SkillCoverageDto {
@@ -32,7 +23,7 @@ export class SkillCoverageDto {
   @ApiProperty()
   frameworkTitel: string;
 
-  @ApiProperty()
+  @ApiProperty({ description: '0–1' })
   tasksTotal: number;
 
   @ApiProperty()
@@ -59,10 +50,118 @@ export class AbteilungsZufriedenheitDto {
   avgSoftskills: number;
 }
 
-export enum WarnSeverity {
-  gut = 'gut',
-  warnung = 'warnung',
-  kritisch = 'kritisch',
+export class NotenTrendDto {
+  @ApiProperty({ enum: Halbjahr })
+  halbjahr: Halbjahr;
+
+  @ApiProperty()
+  fach: string;
+
+  @ApiProperty()
+  zeitraum: string;
+
+  @ApiProperty()
+  schnittGewichtet: number;
+
+  @ApiProperty()
+  noteCount: number;
+}
+
+export class NotenVerteilungDto {
+  @ApiProperty({ description: 'Noten-Verteilung von 1–6' })
+  note1: number;
+
+  @ApiProperty()
+  note2: number;
+
+  @ApiProperty()
+  note3: number;
+
+  @ApiProperty()
+  note4: number;
+
+  @ApiProperty()
+  note5: number;
+
+  @ApiProperty()
+  note6: number;
+}
+
+export class ZeitreiheDto {
+  @ApiProperty()
+  periode: string;
+
+  @ApiProperty()
+  reportQuoteAvg: number;
+
+  @ApiProperty()
+  kompetenzCoverageAvg: number;
+
+  @ApiProperty()
+  notenSchnitt: number;
+}
+
+export class KohortenDto {
+  @ApiProperty()
+  jahr: number;
+
+  @ApiProperty()
+  beruf: string;
+
+  @ApiProperty()
+  azubiCount: number;
+
+  @ApiProperty()
+  avgNotenSchnittGewichtet: number;
+
+  @ApiProperty()
+  avgReportQuote: number;
+
+  @ApiProperty()
+  avgKompetenzCoverage: number;
+
+  @ApiProperty()
+  trendNotenSchnitt: number;
+
+  @ApiProperty()
+  trendReportQuote: number;
+}
+
+export class FruchwarnDto {
+  @ApiProperty()
+  azubiId: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  type: string;
+
+  @ApiProperty()
+  details: string;
+
+  @ApiProperty({ description: 'Schwäche der Warnung' })
+  severity?: string;
+}
+
+export class ReportQuoteDto {
+  @ApiProperty()
+  azubiId: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  year: number;
+
+  @ApiProperty()
+  kalenderwochen: number;
+
+  @ApiProperty()
+  eingereicht: number;
+
+  @ApiProperty({ description: '0–1' })
+  quote: number;
 }
 
 export enum WarnTyp {
@@ -75,32 +174,6 @@ export enum WarnTyp {
   fehlende_aufgaben = 'fehlende_aufgaben',
 }
 
-export class FruchwarnDto {
-  @ApiProperty()
-  azubiId: string;
-
-  @ApiProperty()
-  name: string;
-
-  @ApiProperty({ enum: WarnTyp, description: 'Warn-Typ' })
-  type: string;
-
-  @ApiProperty()
-  details: string;
-
-  @ApiPropertyOptional({ enum: WarnSeverity, description: 'Severity' })
-  severity?: WarnSeverity;
-
-  @ApiPropertyOptional({ description: 'Fach falls zutreffend' })
-  fach?: string;
-}
-
-export interface DashboardResult {
-  role: string;
-  stats: Record<string, number>;
-  warnings: FruchwarnDto[];
-}
-
 export enum ReportingExportKind {
   attendance = 'attendance',
   grades = 'grades',
@@ -111,6 +184,12 @@ export enum ReportingExportKind {
   warnliste = 'warnliste',
   course_completion = 'course_completion',
   zeitreihe = 'zeitreihe',
+}
+
+export class ExportKindDto {
+  @ApiProperty({ enum: ReportingExportKind })
+  @IsEnum(ReportingExportKind)
+  kind: ReportingExportKind;
 }
 
 export class ExportQueryDto {
@@ -143,12 +222,6 @@ export class ExportQueryDto {
   @IsOptional()
   @IsString()
   abteilungId?: string;
-}
-
-export class ExportKindDto {
-  @ApiProperty({ enum: ReportingExportKind })
-  @IsEnum(ReportingExportKind)
-  kind: ReportingExportKind;
 }
 
 export class ZeitraumDto {

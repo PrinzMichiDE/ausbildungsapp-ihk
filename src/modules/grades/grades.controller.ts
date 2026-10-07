@@ -6,6 +6,8 @@
   Param,
   Post,
   Query,
+  Res,
+  HttpCode,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
@@ -188,5 +190,66 @@ export class NotenController {
     @CurrentUser() user: CurrentUser,
   ): Promise<void> {
     await this.service.remove(id, user);
+  }
+
+  @ApiOperation({ summary: 'CSV-Export der Noten' })
+  @ApiResponse({ status: 200, description: 'CSV-Daten' })
+  @Roles(Role.ausbilder, Role.hr)
+  @Get('export/csv')
+  async exportCsv(
+    @CurrentUser() user: CurrentUser,
+    @Query() query?: { azubiId?: string },
+  ) {
+    const csv = await this.service.exportCsv(user, query?.azubiId);
+    return csv;
+  }
+
+  @ApiOperation({ summary: 'PDF-Zeugnis generieren' })
+  @ApiResponse({ status: 200, description: 'PDF-Buffer' })
+  @Roles(Role.ausbilder, Role.hr)
+  @Get(':id/export/pdf')
+  @HttpCode(200)
+  async exportPdf(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUser,
+    @Res() res: any,
+  ): Promise<void> {
+    const pdf = await this.service.exportPdf(user, id);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="zeugnis-${id}.pdf"`);
+    res.send(pdf);
+  }
+
+  @ApiOperation({ summary: 'DSGVO-Export aller Notendaten eines Azubis' })
+  @ApiResponse({ status: 200, description: 'JSON-Daten' })
+  @Roles(Role.hr, Role.admin)
+  @Get(':id/export/datenschutz')
+  async exportDsgvo(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUser,
+  ) {
+    return this.service.exportDsgvo(user, id);
+  }
+
+  @ApiOperation({ summary: 'DSGVO-Anonymisierung einer Note' })
+  @ApiResponse({ status: 200, description: 'Anonymisiert' })
+  @Roles(Role.hr, Role.admin)
+  @Delete(':id/datenschutz')
+  async anonymizeDsgvo(
+    @Param('id') id: string,
+    @CurrentUser() user: CurrentUser,
+  ): Promise<void> {
+    await this.service.anonymizeDsgvo(user, id);
+  }
+
+  @ApiOperation({ summary: 'DSGVO-Löschung einer Note (Art.17)' })
+  @ApiResponse({ status: 204, description: 'Gelöscht' })
+  @Roles(Role.hr, Role.admin)
+  @Delete(':id/datenschutz/:azubiId')
+  async deleteDsgvo(
+    @Param('azubiId') azubiId: string,
+    @CurrentUser() user: CurrentUser,
+  ): Promise<void> {
+    await this.service.deleteDsgvo(user, azubiId);
   }
 }

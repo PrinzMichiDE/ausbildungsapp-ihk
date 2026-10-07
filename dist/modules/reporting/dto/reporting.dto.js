@@ -9,39 +9,24 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 };
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { ReportStatus } from '@prisma/client';
-export class ReportQuoteDto {
-    azubiId;
-    name;
-    year;
-    kalenderwochen;
-    eingereicht;
-    quote;
+import { Halbjahr, ReportStatus } from '@prisma/client';
+export class DashboardResult {
+    role;
+    stats;
+    warnings;
 }
 __decorate([
-    ApiProperty(),
+    ApiProperty({ description: 'Rollenbasierte Dashboard-Daten' }),
     __metadata("design:type", String)
-], ReportQuoteDto.prototype, "azubiId", void 0);
+], DashboardResult.prototype, "role", void 0);
 __decorate([
-    ApiProperty(),
-    __metadata("design:type", String)
-], ReportQuoteDto.prototype, "name", void 0);
+    ApiProperty({ description: 'KPI-Statistiken' }),
+    __metadata("design:type", Object)
+], DashboardResult.prototype, "stats", void 0);
 __decorate([
-    ApiProperty(),
-    __metadata("design:type", Number)
-], ReportQuoteDto.prototype, "year", void 0);
-__decorate([
-    ApiProperty(),
-    __metadata("design:type", Number)
-], ReportQuoteDto.prototype, "kalenderwochen", void 0);
-__decorate([
-    ApiProperty(),
-    __metadata("design:type", Number)
-], ReportQuoteDto.prototype, "eingereicht", void 0);
-__decorate([
-    ApiProperty({ description: '0–1' }),
-    __metadata("design:type", Number)
-], ReportQuoteDto.prototype, "quote", void 0);
+    ApiProperty({ description: 'Frühwarnungen und Warnungen' }),
+    __metadata("design:type", Array)
+], DashboardResult.prototype, "warnings", void 0);
 export class SkillCoverageDto {
     courseId;
     courseTitle;
@@ -63,7 +48,7 @@ __decorate([
     __metadata("design:type", String)
 ], SkillCoverageDto.prototype, "frameworkTitel", void 0);
 __decorate([
-    ApiProperty(),
+    ApiProperty({ description: '0–1' }),
     __metadata("design:type", Number)
 ], SkillCoverageDto.prototype, "tasksTotal", void 0);
 __decorate([
@@ -101,29 +86,135 @@ __decorate([
     ApiProperty(),
     __metadata("design:type", Number)
 ], AbteilungsZufriedenheitDto.prototype, "avgSoftskills", void 0);
-export var WarnSeverity;
-(function (WarnSeverity) {
-    WarnSeverity["gut"] = "gut";
-    WarnSeverity["warnung"] = "warnung";
-    WarnSeverity["kritisch"] = "kritisch";
-})(WarnSeverity || (WarnSeverity = {}));
-export var WarnTyp;
-(function (WarnTyp) {
-    WarnTyp["note_fruehwarnung"] = "note_fruehwarnung";
-    WarnTyp["fehlende_berichte"] = "fehlende_berichte";
-    WarnTyp["foerderbedarf"] = "foerderbedarf";
-    WarnTyp["pruefung_frist"] = "pruefung_frist";
-    WarnTyp["onboarding_rueckstand"] = "onboarding_rueckstand";
-    WarnTyp["kapazitaet"] = "kapazitaet";
-    WarnTyp["fehlende_aufgaben"] = "fehlende_aufgaben";
-})(WarnTyp || (WarnTyp = {}));
+export class NotenTrendDto {
+    halbjahr;
+    fach;
+    zeitraum;
+    schnittGewichtet;
+    noteCount;
+}
+__decorate([
+    ApiProperty({ enum: Halbjahr }),
+    __metadata("design:type", String)
+], NotenTrendDto.prototype, "halbjahr", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", String)
+], NotenTrendDto.prototype, "fach", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", String)
+], NotenTrendDto.prototype, "zeitraum", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenTrendDto.prototype, "schnittGewichtet", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenTrendDto.prototype, "noteCount", void 0);
+export class NotenVerteilungDto {
+    note1;
+    note2;
+    note3;
+    note4;
+    note5;
+    note6;
+}
+__decorate([
+    ApiProperty({ description: 'Noten-Verteilung von 1–6' }),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note1", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note2", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note3", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note4", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note5", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], NotenVerteilungDto.prototype, "note6", void 0);
+export class ZeitreiheDto {
+    periode;
+    reportQuoteAvg;
+    kompetenzCoverageAvg;
+    notenSchnitt;
+}
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", String)
+], ZeitreiheDto.prototype, "periode", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ZeitreiheDto.prototype, "reportQuoteAvg", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ZeitreiheDto.prototype, "kompetenzCoverageAvg", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ZeitreiheDto.prototype, "notenSchnitt", void 0);
+export class KohortenDto {
+    jahr;
+    beruf;
+    azubiCount;
+    avgNotenSchnittGewichtet;
+    avgReportQuote;
+    avgKompetenzCoverage;
+    trendNotenSchnitt;
+    trendReportQuote;
+}
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "jahr", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", String)
+], KohortenDto.prototype, "beruf", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "azubiCount", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "avgNotenSchnittGewichtet", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "avgReportQuote", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "avgKompetenzCoverage", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "trendNotenSchnitt", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], KohortenDto.prototype, "trendReportQuote", void 0);
 export class FruchwarnDto {
     azubiId;
     name;
     type;
     details;
     severity;
-    fach;
 }
 __decorate([
     ApiProperty(),
@@ -134,7 +225,7 @@ __decorate([
     __metadata("design:type", String)
 ], FruchwarnDto.prototype, "name", void 0);
 __decorate([
-    ApiProperty({ enum: WarnTyp, description: 'Warn-Typ' }),
+    ApiProperty(),
     __metadata("design:type", String)
 ], FruchwarnDto.prototype, "type", void 0);
 __decorate([
@@ -142,13 +233,51 @@ __decorate([
     __metadata("design:type", String)
 ], FruchwarnDto.prototype, "details", void 0);
 __decorate([
-    ApiPropertyOptional({ enum: WarnSeverity, description: 'Severity' }),
+    ApiProperty({ description: 'Schwäche der Warnung' }),
     __metadata("design:type", String)
 ], FruchwarnDto.prototype, "severity", void 0);
+export class ReportQuoteDto {
+    azubiId;
+    name;
+    year;
+    kalenderwochen;
+    eingereicht;
+    quote;
+}
 __decorate([
-    ApiPropertyOptional({ description: 'Fach falls zutreffend' }),
+    ApiProperty(),
     __metadata("design:type", String)
-], FruchwarnDto.prototype, "fach", void 0);
+], ReportQuoteDto.prototype, "azubiId", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", String)
+], ReportQuoteDto.prototype, "name", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ReportQuoteDto.prototype, "year", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ReportQuoteDto.prototype, "kalenderwochen", void 0);
+__decorate([
+    ApiProperty(),
+    __metadata("design:type", Number)
+], ReportQuoteDto.prototype, "eingereicht", void 0);
+__decorate([
+    ApiProperty({ description: '0–1' }),
+    __metadata("design:type", Number)
+], ReportQuoteDto.prototype, "quote", void 0);
+export var WarnTyp;
+(function (WarnTyp) {
+    WarnTyp["note_fruehwarnung"] = "note_fruehwarnung";
+    WarnTyp["fehlende_berichte"] = "fehlende_berichte";
+    WarnTyp["foerderbedarf"] = "foerderbedarf";
+    WarnTyp["pruefung_frist"] = "pruefung_frist";
+    WarnTyp["onboarding_rueckstand"] = "onboarding_rueckstand";
+    WarnTyp["kapazitaet"] = "kapazitaet";
+    WarnTyp["fehlende_aufgaben"] = "fehlende_aufgaben";
+})(WarnTyp || (WarnTyp = {}));
 export var ReportingExportKind;
 (function (ReportingExportKind) {
     ReportingExportKind["attendance"] = "attendance";
@@ -161,6 +290,14 @@ export var ReportingExportKind;
     ReportingExportKind["course_completion"] = "course_completion";
     ReportingExportKind["zeitreihe"] = "zeitreihe";
 })(ReportingExportKind || (ReportingExportKind = {}));
+export class ExportKindDto {
+    kind;
+}
+__decorate([
+    ApiProperty({ enum: ReportingExportKind }),
+    IsEnum(ReportingExportKind),
+    __metadata("design:type", String)
+], ExportKindDto.prototype, "kind", void 0);
 export class ExportQueryDto {
     status;
     jahr;
@@ -205,14 +342,6 @@ __decorate([
     IsString(),
     __metadata("design:type", String)
 ], ExportQueryDto.prototype, "abteilungId", void 0);
-export class ExportKindDto {
-    kind;
-}
-__decorate([
-    ApiProperty({ enum: ReportingExportKind }),
-    IsEnum(ReportingExportKind),
-    __metadata("design:type", String)
-], ExportKindDto.prototype, "kind", void 0);
 export class ZeitraumDto {
     von;
     bis;

@@ -19,6 +19,7 @@ export declare class SearchService {
             signiertVon: string | null;
             signiertAm: Date | null;
             archiviertAm: Date | null;
+            ausbildungsnachweisId: string | null;
         }[];
         wiki: {
             id: string;

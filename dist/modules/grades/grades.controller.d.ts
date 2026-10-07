@@ -164,4 +164,11 @@ export declare class NotenController {
         }[];
     }>;
     remove(id: string, user: CurrentUser): Promise<void>;
+    exportCsv(user: CurrentUser, query?: {
+        azubiId?: string;
+    }): Promise<string>;
+    exportPdf(id: string, user: CurrentUser, res: any): Promise<void>;
+    exportDsgvo(id: string, user: CurrentUser): Promise<string>;
+    anonymizeDsgvo(id: string, user: CurrentUser): Promise<void>;
+    deleteDsgvo(azubiId: string, user: CurrentUser): Promise<void>;
 }

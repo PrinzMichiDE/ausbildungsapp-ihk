@@ -46,6 +46,10 @@ import { GradeEntriesModule } from './modules/grade-entries/grade-entries.module
 import { FoerderbedarfModule } from './modules/foerderbedarf/foerderbedarf.module.js';
 import { UebernahmeModule } from './modules/uebernahme/uebernahme.module.js';
 import { AlumniModule } from './modules/alumni/alumni.module.js';
+import { AusbildungsvertragModule } from './modules/ausbildungsvertrag/ausbildungsvertrag.module.js';
+import { AusbildungsnachweisModule } from './modules/ausbildungsnachweis/ausbildungsnachweis.module.js';
+import { StandortModule } from './modules/standort/standort.module.js';
+import { AzubiAkteModule } from './modules/azubiakte/azubi-akte.module.js';
 
 @Module({
   imports: [
@@ -97,6 +101,10 @@ import { AlumniModule } from './modules/alumni/alumni.module.js';
     FoerderbedarfModule,
     UebernahmeModule,
     AlumniModule,
+    AusbildungsvertragModule,
+    AusbildungsnachweisModule,
+    StandortModule,
+    AzubiAkteModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: ThrottlerGuard },

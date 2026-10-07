@@ -1,4 +1,16 @@
 import { ReportStatus, ReportTyp } from '@prisma/client';
+export declare enum AttachmentTyp {
+    screenshot = "screenshot",
+    diagramm = "diagramm",
+    code = "code",
+    sonstiges = "sonstiges"
+}
+export declare enum KommentarArt {
+    allgemein = "allgemein",
+    fachlich = "fachlich",
+    formal = "formal",
+    aufgabenkopplung = "aufgabenkopplung"
+}
 export declare class CreateReportDto {
     titel: string;
     typ: ReportTyp;
@@ -43,18 +55,6 @@ export declare class ReportResponseDto {
     archiviertAm: Date | null;
     taskIds: string[];
     createdAt: Date;
-}
-export declare enum AttachmentTyp {
-    screenshot = "screenshot",
-    diagramm = "diagramm",
-    code = "code",
-    sonstiges = "sonstiges"
-}
-export declare enum KommentarArt {
-    allgemein = "allgemein",
-    fachlich = "fachlich",
-    formal = "formal",
-    aufgabenkopplung = "aufgabenkopplung"
 }
 export declare class AddAttachmentDto {
     typ: AttachmentTyp;

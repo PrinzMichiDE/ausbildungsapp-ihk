@@ -1,120 +1,289 @@
-import { FruchwarnDto } from './reporting.dto.js';
-export declare class AmpelStatusDto {
-    gruen: number;
-    gelb: number;
-    rot: number;
-}
-export declare class OffeneBerichteDto {
-    gesamt: number;
-    ampel: AmpelStatusDto;
-    aeltestesInTagen?: number;
-}
-export declare class HalbjahrTrendDto {
-    halbjahr: string | null;
-    fach: string | null;
-    zeitraum: string;
-    avgGewichtet: number;
-    count: number;
-}
-export declare class NotenStatDto {
-    anzahl: number;
-    schnittGewichtet: number;
-    schnittUngewichtet: number;
-    halbjahrTrends: HalbjahrTrendDto[];
-    fachTrends?: HalbjahrTrendDto[];
-}
-export declare class ProjektPipelineDto {
-    entwurf: number;
-    eingereicht: number;
-    freigegeben: number;
-    abgelehnt: number;
-    archiviert: number;
-    inPruefung?: number;
-}
-export declare class PruefungFristDto {
-    id: string;
-    typ: string;
-    status: string;
-    ihkTermin: Date | null;
-    faelligInTagen: number | null;
-    titel?: string;
-}
-export declare class OnboardingQuoteDto {
-    gesamt: number;
-    erledigt: number;
-    quote: number;
-}
-export declare class BadgeProgressDto {
-    gesamt: number;
-    earned: number;
-    naechstes?: string;
-}
-export declare class AnwesenheitQuoteDto {
-    quote30d: number;
-    fehlTage30d: number;
-    quote90d?: number;
-}
-export declare class SkillCoverageSummaryDto {
-    coverage: number;
-    freigegeben: number;
-    used: number;
-}
+import { Halbjahr } from '@prisma/client';
+import { WarnTyp } from './reporting.dto.js';
 export declare class AzubiDashboardDto {
-    role: string;
-    offeneBerichte: OffeneBerichteDto;
-    skills: SkillCoverageSummaryDto;
-    noten: NotenStatDto;
-    projekte: ProjektPipelineDto;
-    pruefungen: PruefungFristDto[];
-    onboarding: OnboardingQuoteDto;
-    badges: BadgeProgressDto;
-    anwesenheit: AnwesenheitQuoteDto;
+    role: 'azubi';
+    offeneBerichte: {
+        gesamt: number;
+        ampel: {
+            gruen: number;
+            gelb: number;
+            rot: number;
+        };
+    };
+    skillCoverage: {
+        frei: number;
+        used: number;
+        coverage: number;
+    };
+    noten: {
+        anzahl: number;
+        schnittGewichtet: number;
+        halbjahrTrends: {
+            halbjahr: Halbjahr;
+            schnitt: number;
+            fach: string;
+        }[];
+        verteilung: {
+            note1: number;
+            note2: number;
+            note3: number;
+            note4: number;
+            note5: number;
+            note6: number;
+        };
+    };
+    projekte: {
+        entwurf: number;
+        eingereicht: number;
+        freigegeben: number;
+        abgelehnt: number;
+    };
+    pruefungen: {
+        naechsteFristen: {
+            id: string;
+            typ: string;
+            frist: Date;
+            status: string;
+        }[];
+    };
+    onboarding: {
+        erledigt: number;
+        quote: number;
+        naechstes: string;
+    };
+    badges: {
+        gesamt: number;
+        naechstes: string;
+    };
+    anwesenheit: {
+        quote30d: number;
+        fehlTage30d: number;
+    };
     foerderbedarfOffen: number;
-    warnings: FruchwarnDto[];
-    stats?: Record<string, number>;
+    stats: Record<string, number>;
+    warnings: any[];
 }
 export declare class BeauftragterDashboardDto {
-    role: string;
-    openVisa: number;
-    visaAmpel: AmpelStatusDto;
-    kommendeRotationen30d: number;
-    kommendeRotationen90d: number;
-    rotationen: Array<{
-        azubiId: string;
-        name: string;
-        abteilung: string;
-        von: Date;
-    }>;
-    gruppenNotenSchnitt: number;
-    warnCount: number;
+    role: 'ausbildungsbeauftragter';
+    offeneVisa: {
+        gesamt: number;
+        ampel: {
+            gruen: number;
+            gelb: number;
+            rot: number;
+        };
+    };
+    rotationen: {
+        naechste30d: number;
+        naechste90d: number;
+        liste: {
+            azubiId: string;
+            name: string;
+            abteilung: string;
+            von: Date;
+            bis: Date;
+        }[];
+    };
+    skillCoverage: {
+        courses: {
+            courseId: string;
+            courseTitle: string;
+            used: number;
+            total: number;
+            coverage: number;
+        }[];
+    };
+    noten: {
+        schnittGewichtet: number;
+        verteilung: {
+            note1: number;
+            note2: number;
+            note3: number;
+            note4: number;
+            note5: number;
+            note6: number;
+        };
+    };
     foerderbedarfOffen: number;
-    feedbackAvgFachkompetenz: number;
-    feedbackAvgSoftskills: number;
-    abwesenheiten30d: number;
-    warnings: FruchwarnDto[];
-    stats?: Record<string, number>;
+    feedback: {
+        abteilung: {
+            abteilungId: string;
+            avgFachkompetenz: number;
+            avgSoftskills: number;
+        }[];
+    };
+    abwesenheiten: {
+        count30d: number;
+    };
+    stats: Record<string, number>;
+    warnings: any[];
 }
 export declare class AusbilderHrDashboardDto {
-    role: string;
-    azubiGesamt: number;
-    berichtVerteilung: Record<string, number>;
-    projektPipeline: ProjektPipelineDto;
-    pruefungPipeline: Record<string, number>;
-    foerderbedarf: Record<string, number>;
-    onboarding: OnboardingQuoteDto;
-    gamificationCoverage: number;
-    abwesenheitRate: AnwesenheitQuoteDto;
-    kapazitaetWarnungen: Array<{
-        abteilungId: string;
-        name: string;
-        planAusbilder: number;
-        istAzubis: number;
-        status: string;
-    }>;
-    uebernahmePipeline?: Record<string, number>;
-    alumniQuote?: Record<string, number>;
-    notenSchnitt: number;
-    warnings: FruchwarnDto[];
-    stats?: Record<string, number>;
+    role: 'ausbilder' | 'hr';
+    berichtVerteilung: {
+        entwurf: number;
+        eingereicht: number;
+        visiert: number;
+        archiviert: number;
+    };
+    projektPipeline: {
+        entwurf: number;
+        eingereicht: number;
+        freigegeben: number;
+        abgelehnt: number;
+    };
+    pruefungPipeline: {
+        angemeldet: number;
+        teilgenommen: number;
+        bestanden: number;
+        wiederholung: number;
+    };
+    foerderbedarf: {
+        offen: number;
+        erledigt: number;
+        nachverfolgungFaellig: number;
+    };
+    onboardingQuote: {
+        erledigt: number;
+        gesamt: number;
+    };
+    gamificationCoverage: {
+        badgesAvg: number;
+        topBadgeCount: number;
+    };
+    abwesenheitRate: {
+        rate30d: number;
+        rate90d: number;
+    };
+    kapazitaetWarnung: {
+        abteilungen: {
+            abteilungId: string;
+            name: string;
+            planAusbilder: number;
+            istAusbilder: number;
+            status: 'OK' | 'WARNUNG' | 'KRITISCH';
+        }[];
+    };
+    uebernahmePipeline: {
+        geplant: number;
+        geblockt: number;
+        abgeschlossen: number;
+        widerrufen: number;
+    };
+    alumni: {
+        ausgetreten30d: number;
+        loeschungFaellig: number;
+    };
+    stats: Record<string, number>;
+    warnings: any[];
 }
-export type TypedDashboardResult = AzubiDashboardDto | BeauftragterDashboardDto | AusbilderHrDashboardDto;
+export declare class SkillGapDto {
+    lernfeld: string;
+    frameworkTitel: string;
+    tasksTotal: number;
+    reportsUsing: number;
+    coverage: number;
+    istStunden: number;
+    fehlendeTasks: string[];
+    priorität: 'hoch' | 'mittel' | 'niedrig';
+}
+export declare class NotenTrendDto {
+    halbjahr: Halbjahr;
+    fach: string;
+    zeitraum: string;
+    schnittGewichtet: number;
+    noteCount: number;
+}
+export declare class NotenVerteilungDto {
+    note1: number;
+    note2: number;
+    note3: number;
+    note4: number;
+    note5: number;
+    note6: number;
+}
+export declare class ZeitreiheDto {
+    periode: string;
+    reportQuoteAvg: number;
+    kompetenzCoverageAvg: number;
+    notenSchnitt: number;
+}
+export declare class KohortenDto {
+    jahr: number;
+    beruf: string;
+    azubiCount: number;
+    avgNotenSchnittGewichtet: number;
+    avgReportQuote: number;
+    avgKompetenzCoverage: number;
+    avgAbbruchquote: number;
+    trendNotenSchnitt: number;
+    trendReportQuote: number;
+}
+export declare class CourseCompletionDto {
+    courseId: string;
+    courseTitle: string;
+    frameworkTitel: string;
+    completionRate: number;
+    timeToCompletion: {
+        avg: number;
+        median: number;
+    };
+    qualitaetsScoreDistribution: {
+        avg: number;
+        histogram: {
+            range0_50: number;
+            range51_70: number;
+            range71_85: number;
+            range86_100: number;
+        };
+    };
+}
+export declare class AlertConfigDto {
+    id: string;
+    userId: string;
+    typ: WarnTyp;
+    schwelle: Record<string, unknown>;
+    aktiv: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+}
+export declare class CustomReportDto {
+    id: string;
+    name: string;
+    createdBy: string;
+    metrics: string[];
+    timeframe: {
+        von?: string;
+        bis?: string;
+        halbjahr?: string;
+    };
+    visualizations: string[];
+    filters: {
+        abteilungId?: string;
+        beruf?: string;
+        halbjahr?: string;
+    };
+    createdAt: Date;
+}
+export declare class DashboardResult {
+    role: string;
+    stats: Record<string, number>;
+    warnings: any[];
+}
+export declare enum ReportingExportKind {
+    attendance = "attendance",
+    grades = "grades",
+    competency = "competency",
+    noten_trend = "noten_trend",
+    skill_gap = "skill_gap",
+    kohorten = "kohorten",
+    warnliste = "warnliste",
+    course_completion = "course_completion",
+    zeitreihe = "zeitreihe"
+}
+export declare class ZeitraumDto {
+    von?: string;
+    bis?: string;
+    halbjahr?: string;
+}
+export declare function toCsv(rows: ReadonlyArray<Record<string, unknown>>): string;

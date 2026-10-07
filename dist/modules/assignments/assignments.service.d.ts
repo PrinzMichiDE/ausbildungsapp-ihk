@@ -19,6 +19,7 @@ export declare class EinsatzService {
             name: string;
             kurzzeichen: string | null;
             beschreibung: string | null;
+            standortId: string | null;
         };
         azubi: {
             id: string;

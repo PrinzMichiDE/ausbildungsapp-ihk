@@ -1,4 +1,4 @@
-import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums';
+import { Prioritaet } from '../../../common/enums/ausbildungsmanagement.enums.js';
 export declare class CreateLernpfadDto {
     courseId: string;
     prioritaet: Prioritaet;

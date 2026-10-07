@@ -10,6 +10,20 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 import { ApiProperty } from '@nestjs/swagger';
 import { ReportStatus, ReportTyp } from '@prisma/client';
 import { IsArray, IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, IsUUID, Max, MaxLength, Min, MinLength, } from 'class-validator';
+export var AttachmentTyp;
+(function (AttachmentTyp) {
+    AttachmentTyp["screenshot"] = "screenshot";
+    AttachmentTyp["diagramm"] = "diagramm";
+    AttachmentTyp["code"] = "code";
+    AttachmentTyp["sonstiges"] = "sonstiges";
+})(AttachmentTyp || (AttachmentTyp = {}));
+export var KommentarArt;
+(function (KommentarArt) {
+    KommentarArt["allgemein"] = "allgemein";
+    KommentarArt["fachlich"] = "fachlich";
+    KommentarArt["formal"] = "formal";
+    KommentarArt["aufgabenkopplung"] = "aufgabenkopplung";
+})(KommentarArt || (KommentarArt = {}));
 export class CreateReportDto {
     titel;
     typ;
@@ -244,20 +258,6 @@ __decorate([
     ApiProperty(),
     __metadata("design:type", Date)
 ], ReportResponseDto.prototype, "createdAt", void 0);
-export var AttachmentTyp;
-(function (AttachmentTyp) {
-    AttachmentTyp["screenshot"] = "screenshot";
-    AttachmentTyp["diagramm"] = "diagramm";
-    AttachmentTyp["code"] = "code";
-    AttachmentTyp["sonstiges"] = "sonstiges";
-})(AttachmentTyp || (AttachmentTyp = {}));
-export var KommentarArt;
-(function (KommentarArt) {
-    KommentarArt["allgemein"] = "allgemein";
-    KommentarArt["fachlich"] = "fachlich";
-    KommentarArt["formal"] = "formal";
-    KommentarArt["aufgabenkopplung"] = "aufgabenkopplung";
-})(KommentarArt || (KommentarArt = {}));
 export class AddAttachmentDto {
     typ;
     dateiUrl;

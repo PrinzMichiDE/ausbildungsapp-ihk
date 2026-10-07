@@ -1,74 +1,92 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsString, IsEnum, MinLength } from 'class-validator';
-import { AusbildungsnachweisStatus } from '../../../common/enums/ausbildungsmanagement.enums';
+import { ApiProperty } from '@nestjs/swagger';
+import { PartialType } from '@nestjs/swagger';
+import { IsOptional, IsString, IsEnum, IsDate, IsArray } from 'class-validator';
+import { Type } from 'class-transformer';
+import { AusbildungsnachweisStatus } from '../../../common/enums/ausbildungsmanagement.enums.js';
 
 export class CreateAusbildungsnachweisDto {
-  @ApiProperty({ example: 'azubi-uuid' })
+  @ApiProperty({ example: 'Zwischenzeugnis - Q2' })
   @IsString()
-  azubiId: string;
-
-  @ApiProperty({ example: 'Ausbildungsnachweis Q1 2026' })
-  @IsString()
-  @MinLength(2)
   titel: string;
 
-  @ApiProperty({ example: 'Inhalt des Nachweises...' })
+  @ApiProperty({ example: 'Der Azubi hat folgende Leistungen erbracht...' })
   @IsString()
   inhaltMarkdown: string;
 
-  @ApiProperty({ example: 'rahmenlehrplan-uuid' })
+  @ApiProperty({ required: false, example: 'systemintegration' })
+  @IsOptional()
   @IsString()
-  rahmenlehrplanId: string;
+  beruf?: string;
 
-  @ApiProperty({ example: 'betrieblich' })
+  @ApiProperty({ required: false })
+  @IsOptional()
   @IsString()
-  @MinLength(2)
-  typ: string;
+  rahmenlehrplanId?: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsArray()
+  anhaenge?: string[];
 }
 
 export class AusbildungsnachweisResponseDto {
   @ApiProperty()
   id: string;
 
-  @ApiProperty({ example: 'azubi-uuid' })
-  @IsString()
+  @ApiProperty()
   azubiId: string;
 
-  @ApiProperty({ example: 'Ausbildungsnachweis Q1 2026' })
-  @IsString()
+  @ApiProperty({ required: false, example: 'systemintegration' })
+  beruf?: string;
+
+  @ApiProperty({ example: 'Zwischenzeugnis - Q2' })
   titel: string;
 
-  @ApiProperty({ example: 'Inhalt des Nachweises...' })
-  @IsString()
+  @ApiProperty({ example: 'Der Azubi hat folgende Leistungen erbracht...' })
   inhaltMarkdown: string;
 
-  @ApiProperty({ example: 'rahmenlehrplan-uuid' })
-  @IsString()
-  rahmenlehrplanId: string;
+  @ApiProperty({ example: 'entwurf' })
+  status: string;
 
-  @ApiProperty({ example: 'betrieblich' })
-  @IsString()
-  typ: string;
+  @ApiProperty({ required: false })
+  signiertVon?: string | null;
 
-  @ApiProperty({ enum: AusbildungsnachweisStatus })
-  @IsEnum(AusbildungsnachweisStatus)
-  status: AusbildungsnachweisStatus;
+  @ApiProperty({ required: false })
+  signiertAm?: Date | null;
 
-  @ApiProperty({ nullable: true })
-  @IsString()
-  signiertVon: string | null;
+  @ApiProperty({ required: false })
+  archiviertAm?: Date | null;
 
-  @ApiProperty({ nullable: true, type: Date })
-  signiertAm: Date | null;
+  @ApiProperty({ required: false })
+  rahmenlehrplanId?: string | null;
 
-  @ApiProperty({ nullable: true, type: Date })
-  archiviertAm: Date | null;
-
-  @ApiProperty({ type: Date })
+  @ApiProperty()
   erstelltAm: Date;
 
-  @ApiProperty({ type: Date })
+  @ApiProperty()
   updatedAt: Date;
 }
 
 export class UpdateAusbildungsnachweisDto extends PartialType(CreateAusbildungsnachweisDto) {}
+
+export class AddCommentDto {
+  @ApiProperty({ example: 'Gut dokumentiert' })
+  @IsString()
+  text: string;
+
+  @ApiProperty({ required: false, example: 'allgemein' })
+  @IsOptional()
+  @IsString()
+  art?: string;
+}
+
+export class AddVersionDto {
+  @ApiProperty({ example: 'entwurf' })
+  @IsString()
+  inhaltMarkdown: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  status?: string;
+}

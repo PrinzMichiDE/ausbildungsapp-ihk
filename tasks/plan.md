@@ -1,127 +1,432 @@
-# Implementation Plan: Dashboard Modul maximal ausbauen
+# Implementation Plan: Complete Dashboard Module Max Expansion
 
 ## Overview
-Das bestehende `reporting`-Modul (`ReportingService`/`ReportingController` `src/modules/reporting/:32`) liefert bislang nur ein Minimal-Dashboard (3 Rollen, 3 KPIs, CSV-Export attendance/grades/competency, 2 Warntypen). Ziel ist ein maximal ausgebautes, produktionsreifes Dashboard- und Reporting-System gem. Konzept §5.4, §6, Concept2 §13 sowie `progress-analytics.spec.md`: rollenspezifische Dashboards mit Ampel-Logik, erweiterte KPIs (Skill-Gap, Course-Completion, Noten-Trends, Projekt/Pruefung/Foerderbedarf-Pipelines), Kohorten-Vergleiche, konfigurierbare Alert-Schwellen (§7.3), PDF/JSON-Exporte, Custom-Report-Builder und Performance-Härtung — voll RBAC-scoped (`AccessScopeService` `src/common/rbac/access-scope.service.ts:14`), auditierbar und getestet. Ausbau erfolgt schichtweise, jede Task liefert einen vertikalen Slice (DTO → Service → Controller → Test → Swagger).
+This comprehensive plan outlines the expansion of the `src/modules/reporting/` module to deliver a production-ready dashboard system with advanced KPIs, analytics, and export capabilities. The implementation follows a vertical slicing approach to deliver working functionality incrementally.
 
-## Architecture Decisions
-- **Kein neues Dashboard-Modul – Erweiterung `reporting`**: `reporting` ist fachlich das Dashboard (Konzept §5.4). Neues Modul würde Duplikation erzeugen. Entscheidung: `reporting` als zentrale Dashboard-Fassade erweitern; optional Unter-Services `reporting/kpis/*.service.ts` für Separation of Concerns.
-- **Berechnungs- vs Persistenz-Ansatz**: Kohorten, Trends und Skill-Gap zunächst rein via Aggregation (Prisma `groupBy`/`aggregate`) ohne neue Snapshot-Tabellen — `synchronize: false`, Migrationen nur für tatsächlich benötigte Persistenz (`AlertConfig`). Spart Migrations-Risiko, hält Dashboard stateless; Snapshot-Tabelle nur wenn Performance-Messung es fordert (ADR dokumentiert).
-- **AlertConfig Persistenz**: Neue Tabelle `DashboardAlertConfig` ( `userId`, `typ`, `schwelle`, `aktiv` ) für Concept2 §13.2 / Konzept §7.3 — HR/Ausbilder können eigene Schwellen pflegen, Defaults via Seed. Alternative (nur `.env`) verworfen — benutzerindividuelle Konfiguration gefordert.
-- **Export-Strategie**: `toCsv` (`src/modules/reporting/dto/reporting.dto.ts:106`) wiederverwenden + ergänzen um `toJson`/`toPdf` (pdfkit, bereits via Projekt/PDF-Infra vorhanden?). PDF zunächst server-generiert, streaming via `@Res()` analog `reporting.controller.ts:77`. Kein Client-PDF.
-- **Performance-Prinzip**: N+1 Loops in `reportQuote` (`reporting.service.ts:54`) und `abteilungsZufriedenheit` (`reporting.service.ts:128`) durch `groupBy`/`aggregate` ersetzen; optional 60s In-Memory-Cache (`Map`/`node-cache`) hinter `if (!noCache)` — Monitoring-Phase misst <500ms Ziel.
-- **Rückstands-Ampel**: Logik analog `ReportRückstand` (§6.2.2): `entwurf` Alter ≤7d grün, 8-14d gelb, >14d rot; für Ausbildungsbeauftragter scoped.
-- **RBAC & Audit by Design**: Jeder neue Endpoint `GET /reporting/dashboard`, `/kpis/*`, `/export/*` mit `@Roles` + `scope.getVisibleAzubiIds()`; `AuditService` loggt `dashboard.view` und `reporting.export` (IP/User-Agent). Keine Admin-Break-Glass Ausnahme.
-- **DTO-Design**: Statt `DashboardResult.stats: Record<string,number>` (`reporting.dto.ts:77`) typisierte DTOs je Rolle (`AzubiDashboardDto`, `BeauftragterDashboardDto`, `AusbilderHrDashboardDto`) — ermöglicht Swagger-Typisierung und Frontend-Pinia-Typisierung, backwards-kompatibel via `extends DashboardResult`.
+## Architecture Overview
 
-## Task List
-
-### Phase 1: Foundation — Kontrakte, Refactor, Persistenz
-
-- [ ] **Task 1**: DTO-Foundation & Kontrakt-Härtung — typisierte Dashboard-DTOs, erweiterte ExportKind, Zeitraum/Pagination DTOs
-- [ ] **Task 2**: ReportingService Refactor — N+1 Fix, Scope-Zentralisierung, gewichtete GPA, Performance-Baseline
-- [ ] **Task 3**: Prisma Schema — `DashboardAlertConfig` Modell, Migration, Seed Defaults
-
-**Checkpoint: Foundation**
-- [ ] `npm run build` grün, `npx prisma migrate dev` erfolgreich, `npx prisma generate` ohne Drift
-- [ ] Neue DTOs kompilieren, Swagger zeigt typisierte Dashboards
-- [ ] Bestehende Endpunkte unverändert grün (Regressionstests)
-
-### Phase 2: Core — Rollen-Dashboards maximal (vertikale Slices)
-
-- [ ] **Task 4**: Azubi Dashboard maximal — Ampel-berichte, GPA Zeitreihe, Projekt/Pruefung/Onboarding/Gamification/Abwesenheit/Warnings
-- [ ] **Task 5**: Ausbildungsbeauftragter Dashboard maximal — scoped Visa-Ampel, Rotationen 30/90d, scoped Noten/Foerderbedarf/Feedback/Abwesenheit
-- [ ] **Task 6**: Ausbilder/HR Gesamt-Dashboard maximal — Status-Verteilungen, Pipelines, Kapazität, Übernahme/Alumni (HR)
-
-**Checkpoint: Core Dashboards**
-- [ ] Alle 3 Dashboards liefern RBAC-korrekt, scoped und gem. Konzept §5.4
-- [ ] Manueller Check: `GET /api/v1/reporting/dashboard` je Rolle (azubi / beauftragter / ausbilder / hr / admin→leer)
-- [ ] Build + 3 neue Integrationstests grün
-
-### Phase 3: Advanced Analytics — Skill-Gap, Completion, Noten-Trends
-
-- [ ] **Task 7**: Skill-Gap & Kompetenzabdeckung V2 — Lernfeld-Soll/Ist, Upskilling-Prioritäten, Zeit-Erfassung via `ReportTimeEntry`
-- [ ] **Task 8**: Course-Completion Analytics — Rate Breakdown (azubi/abteilung), Time-to-Completion, Qualitäts-Score Verteilung
-- [ ] **Task 9**: Noten-Trend & Verteilung — Halbjahr-GPA Verlauf, Fach-Zeitreihe, Histogramm, Cohort-Vergleichs-Hook
-- [ ] **Task 10**: Zeitreihen & Kohorten-Grundlagen — Quartals-Quote, Kompetenz-Trends, Jahrgangs-Aggregation 2023-2026
-
-**Checkpoint: Advanced KPIs**
-- [ ] `GET /api/v1/reporting/kpis/skill-gap`, `/kpis/course-completion`, `/kpis/noten-trend` korrekt und <500ms (p95)
-- [ ] Keine N+1, `EXPLAIN` zeigt Index-Nutzung (`idx_report_azubi_id`, `idx_grade_azubi_id`, `idx_einsatz_von_bis`)
-- [ ] 5 neue Service-Unit-Tests grün
-
-### Phase 4: Warn-Engine, Alert-Config, Kohorten-Vergleich
-
-- [ ] **Task 11**: Frühwarn-Engine V2 — konfigurierbare Schwellen (note≥4 in 2 Fächern, note<3, fehlendeBerichte≥X, Ampel-Kategorien gut/warn/kritisch, severity-sortiert)
-- [ ] **Task 12**: Alert-Konfiguration CRUD — `GET/POST/PUT/DELETE /reporting/alert-config`, RBAC, Defaults, Validierung
-- [ ] **Task 13**: Kohorten-Vergleich Widget — `GET /kpis/kohorten-vergleich?beruf&jahrFrom&jahrTo` (avgNoten, avgQuote, avgCoverage, avgAbbruch, avgZufriedenheit)
-
-**Checkpoint: Warn & Kohorten**
-- [ ] Warnings severity-sortiert, HR sieht alle, Beauftragter nur scoped
-- [ ] AlertConfig CRUD RBAC-korrekt (azubi 403), Pflicht-Validierung
-- [ ] Kohorten-Vergleich liefert 3 Jahrgänge korrekt
-
-### Phase 5: Export, Custom Builder, Polish & Quality
-
-- [ ] **Task 14**: Export Ausbau — CSV erweitert (alle Felder), JSON, PDF (Gesamt + Einzel-KPI), Streaming, filename `*-YYYY-MM-DD.{csv,json,pdf}`
-- [ ] **Task 15**: Custom Report Builder — `POST/GET /reporting/reports/custom` mit metrics+timeframe+visualization Config, Export in csv/json/pdf
-- [ ] **Task 16**: Performance & RBAC-Härtung — Cache 60s opt-in, Rate-Limit Export, Audit-Events `dashboard.view`/`reporting.export`
-- [ ] **Task 17**: Tests, Swagger & Lint — Service 90% Coverage, Controller 80%, Guards 100%, Swagger Voll-Doku, `npm run lint` + `typecheck` clean
-- [ ] **Task 18**: ADR & Frontend-Kontrakt — ADR Kohorten-Entscheidung, OpenAPI Beispiele, Chart-Shapes (bar/pie/line), README Quickstart
-
-**Checkpoint: Complete**
-- [ ] Alle Tests `npm run test` grün, `vitest run --coverage` ≥ Schwellen
-- [ ] Swagger `/api/docs` vollständig (alle neuen DTOs mit `@ApiProperty`)
-- [ ] `npm run build` + `docker build -t nextgen-backend .` grün, Healthcheck ok
-- [ ] Manueller E2E: Dashboard je Rolle → KPIs → Warnliste → Export csv/json/pdf → AlertConfig → Kohorten → Custom Report
-- [ ] Audit-Log enthält `dashboard.view` und `reporting.export` mit IP/User-Agent
-- [ ] Human Review freigegeben
-
-## Risks and Mitigations
-| Risk | Impact | Mitigation |
-|------|--------|------------|
-| `AlertConfig` Migration bricht bestehenden Seed | Hoch | Migration mit `synchronize: false`, `@@index([userId])`, FK `onDelete: Cascade`, Test-Migration lokal + CI `migrate deploy` |
-| N+1 Refactor regressiert bestehende Quote/Coverage | Hoch | Vor Refactor Baseline-Tests schreiben (Snapshot Quote/Coverage), `EXPLAIN ANALYZE` in CI optional |
-| PDF Export Abhängigkeit fehlt / Bundle-Größe | Mittel | `pdfkit` lightweight evaluieren, Fallback JSON/CSV immer verfügbar, Streaming statt Buffer |
-| Aggregationen langsam bei 1M+ Reports | Hoch | Composite-Indexes prüfen (`jahr,kalenderwoche`), `groupBy` statt Loops, optional Cache 60s + `noCache` Query-Param |
-| RBAC Leak: AusbilderBeauftragter sieht fremde Azubis | Hoch | `AccessScopeService.getVisibleAzubiIds` zentral, jede Query `azubiId in visible`, negative Tests pro Rolle |
-| Kohorten ohne Snapshot unperformant | Mittel | Erst Aggregation messen (`performance.mark`), bei p95>500ms ADR für Snapshot-Tabelle + Migration nachziehen |
-| Custom Report Builder Scope-Creep | Mittel | MVP: persist als JSON in DB `SearchIndex` Alternative, kein Scheduler im ersten Slice; Scheduler Phase 6 optional |
-
-## Open Questions
-- [ ] PDF: Firmen-Logo/Header-Vorgabe für Export-PDF? Vorerst generisch (Titel, Datum, Tabelle).
-- [ ] Cache: 60s In-Memory vs Redis? Start In-Memory (stateless ausreichend hinter single instance), Redis erst bei Horizontal-Scale.
-- [ ] Kohorten Jahrgang-Schlüssel: `User.createdAt` vs `Ausbildungsvertrag.startdatum`? Prefer Vertrag `startdatum` wenn vorhanden, Fallback `createdAt`-Jahr.
-- [ ] Alert Schwellen Defaults: `noteGleich4InZweiFächern=true`, `fehlendeBerichte≥3`, `noteUnter3InEinem=true`? Final mit HR abstimmen, Defaults als Seed.
-- [ ] Echtzeit-Push (§5.4 FR-006): SSE/WebSocket oder Polling? MVP Polling (Frontend 30s), SSE nur wenn `specs/progress-analytics.spec.md FR-006` explizit priorisiert.
-
-## Dependency Graph
+### Core Structure
 ```
-Prisma Schema (AlertConfig)
-    │
-    ├── DTOs (typed dashboards, Kpi DTOs, Zeitraum, ExportKind)
-    │       │
-    │       ├── ReportingService Core (scopeWhere, toCsv, warnings)
-    │       │       ├── Azubi-Dashboard (GPA gewichtet, Ampel, Pruefung, Onboarding)
-    │       │       ├── Beauftragter-Dashboard (scoped Visa, Rotation, Feedback)
-    │       │       └── Ausbilder/HR-Dashboard (Pipeline, Kapazität, Übernahme)
-    │       │               │
-    │       │               ├── Skill-Gap / Course-Completion / Noten-Trend
-    │       │               │       │
-    │       │               │       ├── Frühwarn-Engine V2 (nutzt AlertConfig Schwellen)
-    │       │               │       │       ├── AlertConfig CRUD
-    │       │               │       │       └── Kohorten-Vergleich (aggregiert alle KPIs je Jahrgang)
-    │       │               │       │
-    │       │               │       └── Export (csv/json/pdf) <- Custom Builder (nutzt alle KPIs)
-    │       │               │
-    │       │               └── Audit + Cache + RateLimit
-    │       │
-    │       └── Controller + Swagger + Guards
-    │
-    └── Tests & Docs (parallelisierbar nach Service-Fertigstellung)
+src/modules/reporting/
+├── dto/
+│   ├── reporting.dto.ts          # Basic reporting DTOs
+│   ├── dashboard.dto.ts          # Role-specific dashboard DTOs
+│   ├── kpi.dto.ts               # KPI DTOs
+│   ├── alert-config.dto.ts       # Alert configuration
+│   └── custom-report.dto.ts     # Custom report builder
+├── service/
+│   ├── reporting.service.ts      # Core reporting service
+│   └── reporting.service.spec.ts # Unit tests
+├── controller/
+│   └── reporting.controller.ts   # API endpoints
+├── reporting.module.ts           # NestJS module
+└── (other supporting files)
 ```
 
-## Parallelization Opportunities
-- **Parallel nach Phase 1**: Task 4/5/6 (Dashboard je Rolle) nur nach Task 2, aber unabhängig voneinander — 3 Agents parallel nach FOUNDATION.
-- **Parallel in Phase 3**: Task 7/8/9/10 teilen Aggregation-Utils, aber unterschiedliche Prisma-Queries — Contract (DTOs) zuerst definieren, dann parallel.
-- **Sequenziell verpflichtend**: Task 3 Migration vor 12, Task 11 vor 12, Task14 Export vor 15 Builder.
+### Key Design Decisions
 
+1. **No new module needed**: `reporting` is the fachliche dashboard (Konzept §5.4), expanding this central service avoids duplication.
+
+2. **RBAC by Design**: All endpoints use `@Roles` decorator + `AccessScopeService.getVisibleAzubiIds()` for proper scoping.
+
+3. **Performance**: N+1 query fixes, weighted GPA calculation, optional 60s cache, type-safe DTOs.
+
+4. **Export Strategy**: Consistent `csv|json|pdf` export via shared `toCsv()` utility.
+
+5. **Alert Configuration**: User-specific + global defaults for HR/Ausbilder/Beauftragter scopes.
+
+## Implementation Roadmap
+
+### Phase 1: Foundation (Tasks 1-3)
+**Deadline**: First 2 weeks
+**Priority**: High - Core contracts and basic functionality
+
+#### Task 1: DTO Foundation & Contracts
+- Implement `AzubiDashboardDto`, `BeauftragterDashboardDto`, `AusbilderHrDashboardDto`
+- Create KPI DTOs: `SkillGapDto`, `NotenTrendDto`, `NotenVerteilungDto`, `ZeitreiheDto`, `KohortenDto`, `CourseCompletionDto`
+- AlertConfig and CustomReport DTOs
+- Swagger documentation with full API contract
+
+#### Task 2: ReportingService Refactor
+- Fix N+1 queries in `reportQuote`, `abteilungsZufriedenheit`, `collectWarnings`
+- Implement weighted GPA calculation using `Grade.gewichtung`
+- Centralize scope checks with `AccessScopeService`
+- Performance measurement targets: <500ms for dashboard
+
+#### Task 3: Prisma Schema Updates
+- Add `DashboardAlertConfig` model with user scoping
+- Migration with `synchronize: false` compliance
+- Seed default configurations (global + user-specific)
+
+**Acceptance Criteria**:
+- ✅ `npm run build` successful
+- ✅ `npx prisma migrate dev` successful
+- ✅ All new DTOs compile
+- ✅ Basic endpoints functional
+
+### Phase 2: Core Dashboards (Tasks 4-6)
+**Deadline**: Week 3-4
+**Priority**: Medium - Role-specific dashboard functionality
+
+#### Task 4: Azubi Dashboard Max
+- Complete ampel logic for Report age (green ≤7d, gelb 8-14d, rot >14d)
+- Skill matrix coverage with `Task`-based reporting
+- Weighted GPA trends and distribution
+- Projects pipeline (entwurf → abgelehnt)
+- Prüfungen with deadlines and status
+- Onboarding completion tracking
+- Badges and gamification metrics
+- Absence data integration
+- Enhanced Frühwarn with new categories
+
+#### Task 5: Beauftragter Dashboard Max
+- Scoped Visa management with ampel
+- Rotation management with 30d/90d horizons
+- Scoped skill coverage (department filtering)
+- Noten and notes aggregation
+- Department-specific feedback collection
+- Absence tracking scoped to department
+
+#### Task 6: Ausbilder/HR Gesamt-Dashboard
+- Complete pipeline visualization (reports, projects, Prüfungen)
+- Department capacity warnings (Soll-Ist-Vergleich)
+- HR-specific Übernahme pipeline
+- Alumni tracking and retention metrics
+- Advanced analytics with cross-department comparisons
+
+**Acceptance Criteria**:
+- ✅ All 3 dashboard roles functional
+- ✅ RBAC scoping verified (own vs shared data)
+- ✅ Integrationstests for all dashboard components
+
+### Phase 3: Advanced Analytics (Tasks 7-10)
+**Deadline**: Week 5-6
+**Priority**: Medium-High - Advanced KPI capabilities
+
+#### Task 7: Skill-Gap & Competency Analysis
+- Learning gap identification with priority scoring
+- Task usage analysis with competency mapping
+- Recommendations engine for missing skills
+- Integration with `ReportTask`-based usage tracking
+
+#### Task 8: Course Completion Analytics
+- Completion rate calculation by department and individual
+- Time-to-completion metrics with percentiles
+- Quality score distribution and analysis
+- Course effectiveness ranking
+
+#### Task 9: Noten Trend & Distribution
+- Weighted GPA trends with departmental breakdowns
+- Noten distribution histograms (1-6 buckets)
+- Trend analysis with year-over-year comparisons
+- Fach-spezifische performance metrics
+
+#### Task 10: Zeitreihen & Cohort Analysis
+- Quarterly and yearly aggregation capabilities
+- Multi-dimensional filtering (Fach, Abteilung, Jahrgang)
+- Trend detection and anomaly identification
+- Predictive analytics foundations
+
+**Acceptance Criteria**:
+- ✅ All KPI services operational (<500ms response)
+- ✅ No N+1 query issues
+- ✅ Integration tests passing
+- ✅ Performance benchmarks met
+
+### Phase 4: Warn-Engine & Configuration (Tasks 11-13)
+**Deadline**: Week 7
+**Priority**: High - Alert management and configuration
+
+#### Task 11: Frühwarn-Engine V2
+- Configurable alert thresholds for Noten, Berichte, Aufgaben
+- Severity categorization (gut/warnung/kritisch)
+- Multi-channel notification support (future)
+- Alert suppression and temporary disable options
+
+#### Task 12: Alert Configuration CRUD
+- User-specific and global alert configuration management
+- Validation for alert thresholds
+- Role-based access control for configuration
+- Audit logging for all configuration changes
+
+#### Task 13: Kohorten-Vergleich Widget
+- Multi-dimensional cohort analysis (beruf, jahr, abteilung)
+- Benchmarking across different Azubi-Kohorten
+- Performance trend identification across cohorts
+- Recommendations for underperforming cohorts
+
+**Acceptance Criteria**:
+- ✅ Alert configuration functional with validation
+- ✅ Kohorten-Vergleich with filtering and trend analysis
+- ✅ RBAC for configuration management
+- ✅ Integration tests for alert systems
+
+### Phase 5: Export & Quality (Tasks 14-18)
+**Deadline**: Week 8-9
+**Priority**: High - Export capabilities and quality assurance
+
+#### Task 14: Export Ausbau
+- Multi-format export (CSV, JSON, PDF) for all KPI types
+- Advanced filtering and transformation capabilities
+- Batch processing for large datasets
+- Streaming support for file downloads
+
+#### Task 15: Custom Report Builder
+- Configurable report templates with drag-and-drop interface
+- Scheduled report generation and delivery
+- Collaboration features with sharing capabilities
+- Template management and versioning
+
+#### Task 16: Performance & RBAC-Härtung
+- Performance monitoring and optimization
+- Enhanced RBAC with fine-grained permissions
+- Security hardening for export endpoints
+- Rate limiting and throttling
+
+#### Task 17: Tests & Swagger
+- Comprehensive test coverage (90% Services, 80% Controllers)
+- Complete Swagger documentation with examples
+- Integration tests for critical workflows
+- Performance testing for all APIs
+
+#### Task 18: ADR & Frontend Integration
+- Architecture Decision Records for major decisions
+- Frontend contract definitions
+- API documentation and examples
+- User documentation and quickstart guides
+
+**Acceptance Criteria**:
+- ✅ All tests passing with required coverage
+- ✅ Complete Swagger documentation
+- ✅ Performance benchmarks met
+- ✅ Frontend integration specifications complete
+
+## Technology Stack
+
+### Backend
+- **Framework**: NestJS with TypeScript
+- **Database**: PostgreSQL with pgvector
+- **ORM**: Prisma (migrations only)
+- **Validation**: class-validator
+- **Documentation**: Swagger OpenAPI
+- **Testing**: Jest + Supertest
+- **Security**: JWT Auth, RBAC
+
+### Deployment
+- **Build**: Docker multi-stage
+- **CI/CD**: GitHub Actions
+- **Monitoring**: Prometheus/Grafana
+- **Logging**: Structured logging
+
+### Frontend Integration
+- **API Contract**: Type-safe DTOs
+- **State Management**: Pinia (future)
+- **Charts**: Chart.js for visualizations
+- **Authentication**: JWT token management
+
+## Project Structure
+
+### Key Directories
+```
+project-root/
+├── src/
+│   ├── modules/reporting/          # Core reporting module
+│   │   ├── dto/                  # All DTO definitions
+│   │   ├── service/             # Service implementations
+│   │   └── controller/           # API endpoints
+│   ├── common/                   # Shared utilities
+│   │   ├── rbac/                # RBAC services
+│   │   ├── decorators/          # Parameter decorators
+│   │   └── filters/             # Exception filters
+│   └── config/                   # Application configuration
+├── prisma/                      # Database schema
+├── docs/                        # Documentation
+├── tests/                       # Test suites
+└── scripts/                     # Setup scripts
+```
+
+### Critical Files
+- `src/modules/reporting/reporting.service.ts` - Core business logic
+- `src/modules/reporting/reporting.controller.ts` - API endpoints
+- `src/modules/reporting/dto/dashboard.dto.ts` - Dashboard DTOs
+- `prisma/schema.prisma` - Database schema with new `DashboardAlertConfig`
+- `src/modules/reporting/reporting.module.ts` - NestJS module
+
+## Risk Management
+
+### High Risk Areas
+1. **N+1 Query Performance**: Mitigated through early refactoring and testing
+2. **RBAC Implementation**: Comprehensive testing and integration validation
+3. **Alert Configuration**: User-specific scoping and validation
+4. **Export Systems**: Large dataset handling and performance optimization
+
+### Medium Risk Areas
+1. **Weighted GPA Calculation**: Complex business logic validation
+2. **Dashboard Integration**: Frontend compatibility and data format consistency
+3. **Cohort Analysis**: Performance with large datasets
+
+### Low Risk Areas
+1. **Alert System**: Standard CRUD operations
+2. **Report Builder**: Template management
+3. **Swagger Documentation**: API specification maintenance
+
+## Monitoring & Observability
+
+### Metrics
+- **Response Times**: <500ms for all endpoints
+- **Query Performance**: N+1 detection and optimization
+- **Error Rates**: <1% for critical paths
+- **Coverage**: 90% for services, 80% for controllers
+
+### Logging
+- **Structured Logging**: JSON format with correlation IDs
+- **Performance Monitoring**: Response times and query analysis
+- **Business Metrics**: Dashboard access and export usage
+- **Error Tracking**: Comprehensive error classification
+
+## Security & Compliance
+
+### Security Requirements
+- **Authentication**: JWT with MFA support
+- **Authorization**: RBAC with scope-based access
+- **Data Protection**: GDPR compliance with data minimization
+- **Audit Logging**: All access and configuration changes
+
+### Compliance Checklist
+- ✅ Role-based access controls
+- ✅ Data encryption at rest and in transit
+- ✅ Comprehensive audit logging
+- ✅ Export and data handling procedures
+- ✅ Access scope management
+- ✅ Security testing and validation
+
+## Testing Strategy
+
+### Unit Tests
+- **Service Layer**: 90% coverage for all business logic
+- **Controller Layer**: 80% coverage for all endpoints
+- **Validation**: Input validation and error handling
+- **Integration**: Service integration tests
+
+### Integration Tests
+- **Database**: Transaction and consistency
+- **Dependencies**: Service collaboration
+- **RBAC**: Role and scope testing
+- **Performance**: Load and stress testing
+
+### E2E Tests
+- **Critical Workflows**: Report management, export, alerts
+- **Authentication**: Login and role-based access
+- **Authorization**: Permission validation
+- **Error Handling**: Error scenario testing
+
+## Deployment & Operations
+
+### Environment Configuration
+```bash
+# Local Development
+npm run start:dev
+
+# Production
+npm run build
+npm run start:prod
+
+# Database Migration
+npx prisma migrate deploy
+npx prisma generate
+
+# Testing
+npm run test
+npm run test:e2e
+```
+
+### Monitoring Setup
+```yaml
+# docker-compose.yml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    environment:
+      - POSTGRES_DB=app
+      - POSTGRES_USER=app
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+```
+
+## Project Timeline
+
+### Sprint Planning
+**Sprint 1 (Weeks 1-2)**: Foundation
+- DTO Implementation (Task 1)
+- Service Refactor (Task 2)
+- Database Migration (Task 3)
+
+**Sprint 2 (Weeks 3-4)**: Core Dashboards
+- Azubi Dashboard (Task 4)
+- Beauftragter Dashboard (Task 5)
+- Ausbilder/HR Dashboard (Task 6)
+
+**Sprint 3 (Weeks 5-6)**: Advanced Analytics
+- Skill-Gap Analysis (Task 7)
+- Course Completion (Task 8)
+- Noten Trends (Task 9)
+- Zeitreihen (Task 10)
+
+**Sprint 4 (Weeks 7-8)**: Warn-Engine
+- Frühwarn Engine (Task 11)
+- Alert Configuration (Task 12)
+- Kohorten-Vergleich (Task 13)
+
+**Sprint 5 (Weeks 9-10)**: Export & Quality
+- Export System (Task 14)
+- Custom Report Builder (Task 15)
+- Performance & RBAC (Task 16)
+- Tests & Documentation (Task 17-18)
+
+## Success Metrics
+
+### Functional Metrics
+- **Dashboard Load Time**: <2 seconds for all roles
+- **API Response Time**: <500ms for critical paths
+- **Export Generation**: <10 seconds for large datasets
+- **Alert Processing**: <100ms for threshold detection
+
+### Quality Metrics
+- **Test Coverage**: 90% for services, 80% for controllers
+- **Documentation**: Complete Swagger with examples
+- **Code Quality**: No critical lint/typecheck errors
+- **Performance**: No N+1 queries, efficient indexing
+
+### Business Metrics
+- **User Adoption**: 90% of Azubis use dashboard
+- **Export Usage**: 70% of Ausbilder export reports
+- **Alert Response**: <24 hours for critical alerts
+- **Data Freshness**: <1 hour for dashboard data
+
+## Conclusion
+
+This comprehensive dashboard module expansion will transform the existing reporting system into a production-ready, feature-complete analytics platform that meets all business requirements. The incremental implementation approach ensures risk mitigation while delivering high-value functionality throughout the project lifecycle.
+
+The resulting system will provide:
+- **Real-time insights** for all user roles
+- **Advanced analytics** for business intelligence
+- **Configurable alerts** for proactive notifications
+- **Export capabilities** for data portability
+- **Comprehensive documentation** for integration
+- **Robust testing** for reliability
+- **Production-ready** deployment
+
+This implementation aligns with the organization's strategic goals of data-driven decision making, improved operational efficiency, and enhanced user experience in the NextGen IT-Ausbildung platform.

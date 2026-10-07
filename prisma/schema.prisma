@@ -115,6 +115,10 @@ model User {
   skillAssignments        SkillAssignment[] @relation("SkillAssignmentAzubi")
   lernpfad                Lernpfad[]        @relation("LernpfadAzubi")
   lernpfadErstellt        Lernpfad[]        @relation("LernpfadErsteller")
+  nachweisKommentare      AusbildungsnachweisKommentar[] @relation("AusbildungsnachweisKommentarAuthor")
+  datenportabilitaet      Datenportabilitaet[]
+  unterrichtsstunden      Unterrichtsstunde[]
+  benutzerspezifischeAlertKonfigurationen BenutzerspezifischeAlertKonfiguration[]
 
   @@index([azubiId], map: "idx_users_azubi_id")
   @@map("users")
@@ -138,14 +142,15 @@ model Abteilung {
    kurzzeichen String? @map("kurzzeichen")
    beschreibung String? @map("beschreibung")
    standortId  String? @map("standort_id")
+   standort    Standort? @relation(fields: [standortId], references: [id])
    createdAt   DateTime @default(now()) @map("created_at")
    updatedAt   DateTime @updatedAt @map("updated_at")
 
-  verantwortliche User[] @relation("AbteilungVerantwortliche")
-  einsaetze      Einsatz[]
-  feedback       Feedback[]
+   verantwortliche User[] @relation("AbteilungVerantwortliche")
+   einsaetze      Einsatz[]
+   feedback       Feedback[]
 
-  @@map("abteilungen")
+   @@map("abteilungen")
 }
 
 model Einsatz {
@@ -533,6 +538,7 @@ model Badge {
   createdAt    DateTime @default(now()) @map("created_at")
 
   userBadges UserBadge[]
+  standortspezifischeBadges StandortspezifischeBadge[]
 
   @@map("badges")
 }
@@ -1238,15 +1244,19 @@ model Lernpfad {
 }
 
 model Standort {
-   id        String   @id @default(uuid())
-   name      String
-   adresse   String?
-   plz       String?
-   ort       String?
-   createdAt DateTime @default(now()) @map("created_at")
-   updatedAt DateTime @updatedAt @map("updated_at")
+  id                   String   @id @default(uuid())
+  name                 String
+  adresse              String?
+  plz                  String?
+  ort                  String?
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  standortspezifischeBadges StandortspezifischeBadge[]
+  standortspezifischeLektionen StandortspezifischeLektion[]
 
-   @@map("standorte")
+  abteilungen Abteilung[]
+
+  @@map("standorte")
 }
 
 model Tag {
@@ -1287,33 +1297,24 @@ model Schnittstellenkonfiguration {
 }
 
 model Ausbildungsnachweis {
-   id               String   @id @default(uuid())
-   azubiId          String   @map("azubi_id")
-   titel            String
-   inhaltMarkdown   String   @map("inhalt_markdown")
-   status           String   @default("entwurf")
-   signiertVon      String?  @map("signiert_von")
-   signiertAm       DateTime? @map("signiert_am")
-   archiviertAm     DateTime? @map("archiviert_am")
-   rahmenlehrplanId String?  @map("rahmenlehrplan_id")
-   erstelltAm       DateTime @default(now()) @map("erstellt_am")
-   updatedAt        DateTime @updatedAt @map("updated_at")
-
-   @@index([azubiId])
-   @@index([status])
-   @@map("ausbildungsnachweise")
-}
-
-model Lernpfad {
-   id             String   @id @default(uuid())
-   azubiId        String   @map("azubi_id")
-   courseId       String?  @map("course_id")
-   prioritaet     String   @default("mittel")
-   skipBegruendung String?
-   erstelltAm     DateTime @default(now()) @map("erstellt_am")
-   updatedAt      DateTime @updatedAt @map("updated_at")
-
-   @@map("lernpfade")
+  id String @id @default(uuid())
+  azubiId String @map("azubi_id")
+  titel String
+  inhaltMarkdown String @map("inhalt_markdown")
+  status String @default("entwurf")
+  signiertVon String? @map("signiert_von")
+  signiertAm DateTime? @map("signiert_am")
+  archiviertAm DateTime? @map("archiviert_am")
+  rahmenlehrplanId String? @map("rahmenlehrplan_id")
+  erstelltAm DateTime @default(now()) @map("erstellt_am")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  kommentare AusbildungsnachweisKommentar[]
+  anhaenge AusbildungsnachweisAnhang[]
+  versions AusbildungsnachweisVersion[]
+  rahmenlehrplan Rahmenlehrplan? @relation(fields: [rahmenlehrplanId], references: [id])
+  @@index([azubiId])
+  @@index([status])
+  @@map("ausbildungsnachweise")
 }
 
 model Pruefungssimulation {
@@ -1424,16 +1425,163 @@ model FAQ {
 }
 
 model CustomCourse {
-   id              String   @id @default(uuid())
-   ausbilderId     String   @map("ausbilder_id")
-   titel           String
-   beschreibung    String?
-   inhalt          String?
-   verantwortlichkeiten String[]
-   freigegeben     Boolean  @default(false)
-   erstelltAm      DateTime @default(now()) @map("erstellt_am")
-   genehmigtVon    String?  @map("genehmigt_von")
-   updatedAt       DateTime @updatedAt @map("updated_at")
+  id              String   @id @default(uuid())
+  ausbilderId     String   @map("ausbilder_id")
+  titel           String
+  beschreibung    String?
+  inhalt          String?
+  verantwortlichkeiten String[]
+  freigegeben     Boolean  @default(false)
+  erstelltAm      DateTime @default(now()) @map("erstellt_am")
+  genehmigtVon    String?  @map("genehmigt_von")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
-   @@map("custom_courses")
+  @@map("custom_courses")
 }
+
+model Rahmenlehrplan {
+  id          String        @id @default(uuid())
+  beruf       Ausbildungsberuf
+  jahr        Int
+  name        String
+  inhalt      Json
+  istStandard Boolean       @default(false) @map("ist_standard")
+  version     Int           @default(1)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  ausbildungsnachweise Ausbildungsnachweis[]
+
+  @@map("rahmenlehrplaene")
+}
+
+model AusbildungsnachweisKommentar {
+  id          String   @id @default(uuid())
+  nachweisId  String   @map("nachweis_id")
+  authorId    String   @map("author_id")
+  text        String
+  art         String   @default("allgemein")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  nachweis Ausbildungsnachweis @relation(fields: [nachweisId], references: [id], onDelete: Cascade)
+  author   User @relation("AusbildungsnachweisKommentarAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([nachweisId], map: "idx_nachweis_kommentar_nachweis_id")
+  @@map("ausbildungsnachweis_kommentare")
+}
+
+model AusbildungsnachweisAnhang {
+  id          String   @id @default(uuid())
+  nachweisId  String   @map("nachweis_id")
+  typ         String
+  dateiUrl    String   @map("datei_url")
+  kommentar   String?
+  erstelltVon String?  @map("erstellt_von")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  nachweis Ausbildungsnachweis @relation(fields: [nachweisId], references: [id], onDelete: Cascade)
+
+  @@index([nachweisId], map: "idx_nachweis_anhang_nachweis_id")
+  @@map("ausbildungsnachweis_anhaenge")
+}
+
+model AusbildungsnachweisVersion {
+  id             String   @id @default(uuid())
+  nachweisId   String   @map("nachweis_id")
+  version        Int
+  inhaltMarkdown String   @map("inhalt_markdown")
+  status         String
+  erstelltVon    String?  @map("erstellt_von")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  nachweis Ausbildungsnachweis @relation(fields: [nachweisId], references: [id], onDelete: Cascade)
+
+  @@unique([nachweisId, version], map: "uq_nachweis_version")
+  @@index([nachweisId], map: "idx_nachweis_version_nachweis_id")
+  @@map("ausbildungsnachweis_versions")
+}
+
+model BenutzerspezifischeAlertKonfiguration {
+  id         String   @id @default(uuid())
+  benutzerId String   @map("benutzer_id")
+  typ        String
+  schwellenwert Float?
+  aktive     Boolean  @default(true)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [benutzerId], references: [id], onDelete: Cascade)
+
+  @@index([benutzerId], map: "idx_alert_benutzer_id")
+  @@map("alert_konfigurationen")
+}
+
+model Datenportabilitaet {
+  id        String   @id @default(uuid())
+  azubiId  String   @map("azubi_id")
+  exportTyp String
+  daten     Json
+  erstelltAm DateTime @default(now()) @map("erstellt_am")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_datenportabilitaet_azubi_id")
+  @@map("datenportabilitaet")
+}
+
+model Kohorte {
+  id                       String   @id @default(uuid())
+  jahr                     Int
+  beruf                    Ausbildungsberuf
+  durchschnittAbbruchquote Float?   @map("durchschnitt_abbruchquote")
+  durchschnittNotendurchschnitt Float? @map("durchschnitt_notendurchschnitt")
+  durchschnittKompetenzabdeckung Float? @map("durchschnitt_kompetenzabdeckung")
+  createdAt                DateTime @default(now()) @map("created_at")
+
+  @@map("kohorten")
+}
+
+model Unterrichtsstunde {
+  id          String   @id @default(uuid())
+  azubiId    String   @map("azubi_id")
+  datum       DateTime
+  typ         String
+  beschreibung String?
+  stunden     Float    @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  azubi User @relation(fields: [azubiId], references: [id], onDelete: Cascade)
+
+  @@index([azubiId], map: "idx_unterricht_azubi_id")
+  @@map("unterrichtsstunden")
+}
+
+model StandortspezifischeBadge {
+  id          String   @id @default(uuid())
+  standortId  String   @map("standort_id")
+  badgeId     String   @map("badge_id")
+  beschreibung String?
+  criteria    Json?
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  standort Standort @relation(fields: [standortId], references: [id], onDelete: Cascade)
+  badge    Badge @relation(fields: [badgeId], references: [id], onDelete: Cascade)
+
+  @@unique([standortId, badgeId], map: "uq_standort_badge")
+  @@map("standortspezifische_badges")
+}
+
+model StandortspezifischeLektion {
+  id               String        @id @default(uuid())
+  standortId      String        @map("standort_id")
+  titel            String
+  inhaltMarkdown  String        @map("inhalt_markdown")
+  erstelltAm      DateTime      @default(now()) @map("erstellt_am")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  standort Standort @relation(fields: [standortId], references: [id], onDelete: Cascade)
+
+  @@index([standortId], map: "idx_standort_lektion_standort_id")
+  @@map("standortspezifische_lektionen")
+}
+

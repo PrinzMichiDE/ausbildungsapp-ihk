@@ -7,55 +7,55 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-var _a;
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsString, IsEnum, MinLength } from 'class-validator';
-import { AusbildungsnachweisStatus } from '../../../common/enums/ausbildungsmanagement.enums';
+import { ApiProperty } from '@nestjs/swagger';
+import { PartialType } from '@nestjs/swagger';
+import { IsOptional, IsString, IsArray } from 'class-validator';
 export class CreateAusbildungsnachweisDto {
-    azubiId;
     titel;
     inhaltMarkdown;
+    beruf;
     rahmenlehrplanId;
-    typ;
+    anhaenge;
 }
 __decorate([
-    ApiProperty({ example: 'azubi-uuid' }),
+    ApiProperty({ example: 'Zwischenzeugnis - Q2' }),
     IsString(),
-    __metadata("design:type", String)
-], CreateAusbildungsnachweisDto.prototype, "azubiId", void 0);
-__decorate([
-    ApiProperty({ example: 'Ausbildungsnachweis Q1 2026' }),
-    IsString(),
-    MinLength(2),
     __metadata("design:type", String)
 ], CreateAusbildungsnachweisDto.prototype, "titel", void 0);
 __decorate([
-    ApiProperty({ example: 'Inhalt des Nachweises...' }),
+    ApiProperty({ example: 'Der Azubi hat folgende Leistungen erbracht...' }),
     IsString(),
     __metadata("design:type", String)
 ], CreateAusbildungsnachweisDto.prototype, "inhaltMarkdown", void 0);
 __decorate([
-    ApiProperty({ example: 'rahmenlehrplan-uuid' }),
+    ApiProperty({ required: false, example: 'systemintegration' }),
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], CreateAusbildungsnachweisDto.prototype, "beruf", void 0);
+__decorate([
+    ApiProperty({ required: false }),
+    IsOptional(),
     IsString(),
     __metadata("design:type", String)
 ], CreateAusbildungsnachweisDto.prototype, "rahmenlehrplanId", void 0);
 __decorate([
-    ApiProperty({ example: 'betrieblich' }),
-    IsString(),
-    MinLength(2),
-    __metadata("design:type", String)
-], CreateAusbildungsnachweisDto.prototype, "typ", void 0);
+    ApiProperty({ required: false }),
+    IsOptional(),
+    IsArray(),
+    __metadata("design:type", Array)
+], CreateAusbildungsnachweisDto.prototype, "anhaenge", void 0);
 export class AusbildungsnachweisResponseDto {
     id;
     azubiId;
+    beruf;
     titel;
     inhaltMarkdown;
-    rahmenlehrplanId;
-    typ;
     status;
     signiertVon;
     signiertAm;
     archiviertAm;
+    rahmenlehrplanId;
     erstelltAm;
     updatedAt;
 }
@@ -64,56 +64,79 @@ __decorate([
     __metadata("design:type", String)
 ], AusbildungsnachweisResponseDto.prototype, "id", void 0);
 __decorate([
-    ApiProperty({ example: 'azubi-uuid' }),
-    IsString(),
+    ApiProperty(),
     __metadata("design:type", String)
 ], AusbildungsnachweisResponseDto.prototype, "azubiId", void 0);
 __decorate([
-    ApiProperty({ example: 'Ausbildungsnachweis Q1 2026' }),
-    IsString(),
+    ApiProperty({ required: false, example: 'systemintegration' }),
+    __metadata("design:type", String)
+], AusbildungsnachweisResponseDto.prototype, "beruf", void 0);
+__decorate([
+    ApiProperty({ example: 'Zwischenzeugnis - Q2' }),
     __metadata("design:type", String)
 ], AusbildungsnachweisResponseDto.prototype, "titel", void 0);
 __decorate([
-    ApiProperty({ example: 'Inhalt des Nachweises...' }),
-    IsString(),
+    ApiProperty({ example: 'Der Azubi hat folgende Leistungen erbracht...' }),
     __metadata("design:type", String)
 ], AusbildungsnachweisResponseDto.prototype, "inhaltMarkdown", void 0);
 __decorate([
-    ApiProperty({ example: 'rahmenlehrplan-uuid' }),
-    IsString(),
+    ApiProperty({ example: 'entwurf' }),
     __metadata("design:type", String)
-], AusbildungsnachweisResponseDto.prototype, "rahmenlehrplanId", void 0);
-__decorate([
-    ApiProperty({ example: 'betrieblich' }),
-    IsString(),
-    __metadata("design:type", String)
-], AusbildungsnachweisResponseDto.prototype, "typ", void 0);
-__decorate([
-    ApiProperty({ enum: AusbildungsnachweisStatus }),
-    IsEnum(AusbildungsnachweisStatus),
-    __metadata("design:type", typeof (_a = typeof AusbildungsnachweisStatus !== "undefined" && AusbildungsnachweisStatus) === "function" ? _a : Object)
 ], AusbildungsnachweisResponseDto.prototype, "status", void 0);
 __decorate([
-    ApiProperty({ nullable: true }),
-    IsString(),
+    ApiProperty({ required: false }),
     __metadata("design:type", Object)
 ], AusbildungsnachweisResponseDto.prototype, "signiertVon", void 0);
 __decorate([
-    ApiProperty({ nullable: true, type: Date }),
+    ApiProperty({ required: false }),
     __metadata("design:type", Object)
 ], AusbildungsnachweisResponseDto.prototype, "signiertAm", void 0);
 __decorate([
-    ApiProperty({ nullable: true, type: Date }),
+    ApiProperty({ required: false }),
     __metadata("design:type", Object)
 ], AusbildungsnachweisResponseDto.prototype, "archiviertAm", void 0);
 __decorate([
-    ApiProperty({ type: Date }),
+    ApiProperty({ required: false }),
+    __metadata("design:type", Object)
+], AusbildungsnachweisResponseDto.prototype, "rahmenlehrplanId", void 0);
+__decorate([
+    ApiProperty(),
     __metadata("design:type", Date)
 ], AusbildungsnachweisResponseDto.prototype, "erstelltAm", void 0);
 __decorate([
-    ApiProperty({ type: Date }),
+    ApiProperty(),
     __metadata("design:type", Date)
 ], AusbildungsnachweisResponseDto.prototype, "updatedAt", void 0);
 export class UpdateAusbildungsnachweisDto extends PartialType(CreateAusbildungsnachweisDto) {
 }
+export class AddCommentDto {
+    text;
+    art;
+}
+__decorate([
+    ApiProperty({ example: 'Gut dokumentiert' }),
+    IsString(),
+    __metadata("design:type", String)
+], AddCommentDto.prototype, "text", void 0);
+__decorate([
+    ApiProperty({ required: false, example: 'allgemein' }),
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], AddCommentDto.prototype, "art", void 0);
+export class AddVersionDto {
+    inhaltMarkdown;
+    status;
+}
+__decorate([
+    ApiProperty({ example: 'entwurf' }),
+    IsString(),
+    __metadata("design:type", String)
+], AddVersionDto.prototype, "inhaltMarkdown", void 0);
+__decorate([
+    ApiProperty({ required: false }),
+    IsOptional(),
+    IsString(),
+    __metadata("design:type", String)
+], AddVersionDto.prototype, "status", void 0);
 //# sourceMappingURL=ausbildungsnachweis.dto.js.map

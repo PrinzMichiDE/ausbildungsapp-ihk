@@ -13,7 +13,7 @@ import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { Role } from '../../common/constants/roles.js';
 import { ERROR_CODES } from '../../common/constants/error-codes.js';
 import { AuditService } from '../audit/audit.service.js';
-import { AusbildungsplanStatus } from '@prisma/client';
+import { AusbildungsplanStatus, Prisma } from '@prisma/client';
 let AusbildungsplanService = class AusbildungsplanService {
     prisma;
     scope;
@@ -33,7 +33,7 @@ let AusbildungsplanService = class AusbildungsplanService {
                 ausbilderId: user.id,
                 beruf: dto.beruf,
                 jahr: dto.jahr,
-                inhalte: dto.inhalte ?? null,
+                inhalte: dto.inhalte ?? Prisma.DbNull,
                 status: AusbildungsplanStatus.entwurf,
                 anhangUrl: dto.anhangUrl ?? null,
             },
@@ -165,10 +165,13 @@ let AusbildungsplanService = class AusbildungsplanService {
         return {
             id: plan.id, azubiId: plan.azubiId, ausbilderId: plan.ausbilderId,
             beruf: plan.beruf, jahr: plan.jahr,
-            inhalte: plan.inhalte, status: plan.status,
-            anhangUrl: plan.anhangUrl, gueltigVon: plan.gueltigVon,
-            gueltigBis: plan.gueltigBis, geprueftVon: plan.geprueftVon,
-            geprueftAm: plan.geprueftAm, createdAt: plan.createdAt, updatedAt: plan.updatedAt,
+            inhalte: plan.inhalte ?? undefined, status: plan.status,
+            anhangUrl: plan.anhangUrl ?? undefined,
+            gueltigVon: plan.gueltigVon ?? undefined,
+            gueltigBis: plan.gueltigBis ?? undefined,
+            geprueftVon: plan.geprueftVon ?? undefined,
+            geprueftAm: plan.geprueftAm ?? undefined,
+            createdAt: plan.createdAt, updatedAt: plan.updatedAt,
         };
     }
 };

@@ -13,6 +13,12 @@
       "skillPath": "skills/browser-testing-with-devtools/SKILL.md",
       "computedHash": "639950ea71851d9c4919608cba8b6276cd1ba30cd82acdc4949c701537eed661"
     },
+    "build-graph": {
+      "source": "tirth8205/code-review-graph",
+      "sourceType": "github",
+      "skillPath": "skills/build-graph/SKILL.md",
+      "computedHash": "839298115d23dd3d47f1a10806c5f3c7ed8e6f147ed84c3990d2c6c82577efaa"
+    },
     "ci-cd-and-automation": {
       "source": "addyosmani/agent-skills",
       "sourceType": "github",
@@ -49,17 +55,11 @@
       "skillPath": "skills/context-engineering/SKILL.md",
       "computedHash": "807434a4b178635a5539a1da241815ba7228f00b71f8e3ccd529472ce3bcaf80"
     },
-    "context7-cli": {
-      "source": "upstash/context7",
+    "debug-issue": {
+      "source": "tirth8205/code-review-graph",
       "sourceType": "github",
-      "skillPath": "skills/context7-cli/SKILL.md",
-      "computedHash": "5244306f18a412922be7718a35e265bbd65e6700424d21f048fdee48369ae9e9"
-    },
-    "context7-mcp": {
-      "source": "upstash/context7",
-      "sourceType": "github",
-      "skillPath": "skills/context7-mcp/SKILL.md",
-      "computedHash": "954151658cec03361a75b712d8611a551f4c929976b0540799bce84d900a351f"
+      "skillPath": "skills/debug-issue/SKILL.md",
+      "computedHash": "c462279973ee9a23e008734b2a6d40fcce75a51786cf0ed9777834cc2505c900"
     },
     "debugging-and-error-recovery": {
       "source": "addyosmani/agent-skills",
@@ -85,11 +85,11 @@
       "skillPath": "skills/doubt-driven-development/SKILL.md",
       "computedHash": "b13f18a68abf2a1fd0c30adeac9bec0ee551adec9f2a1dc2700f1a6e3eb48092"
     },
-    "find-docs": {
-      "source": "upstash/context7",
+    "explore-codebase": {
+      "source": "tirth8205/code-review-graph",
       "sourceType": "github",
-      "skillPath": "skills/find-docs/SKILL.md",
-      "computedHash": "08eb9ec903138793426445922381c37ae8daf3a4898ab640a904550710ab13d8"
+      "skillPath": "skills/explore-codebase/SKILL.md",
+      "computedHash": "9a01a9a053927cf0493ff795a4ea74f67036d245fb6f731536c5a848ffda0823"
     },
     "frontend-ui-engineering": {
       "source": "addyosmani/agent-skills",
@@ -102,12 +102,6 @@
       "sourceType": "github",
       "skillPath": "skills/git-workflow-and-versioning/SKILL.md",
       "computedHash": "e8e0d1cc98c0a6b81d2979442ae92addae32cd5194fb5c4eac4ac5228b408770"
-    },
-    "graphify": {
-      "source": "Graphify-Labs/graphify",
-      "sourceType": "github",
-      "skillPath": "graphify/SKILL.md",
-      "computedHash": "1a6133fa84ff446eabcc284055f031cf76e26c8915a7f3e1efb363a721e8fea7"
     },
     "idea-refine": {
       "source": "addyosmani/agent-skills",
@@ -144,6 +138,30 @@
       "sourceType": "github",
       "skillPath": "skills/planning-and-task-breakdown/SKILL.md",
       "computedHash": "0dc14a1402cdabd376f2d81d2225fcb4a18ee63d58b945ff83affeb024285b8f"
+    },
+    "refactor-safely": {
+      "source": "tirth8205/code-review-graph",
+      "sourceType": "github",
+      "skillPath": "skills/refactor-safely/SKILL.md",
+      "computedHash": "47b0ae4c8fab27a287d5908856b586abc0b07908c56af09f3a46121d633dfe3a"
+    },
+    "review-changes": {
+      "source": "tirth8205/code-review-graph",
+      "sourceType": "github",
+      "skillPath": "skills/review-changes/SKILL.md",
+      "computedHash": "4a99a020534dd68801c59c168a19e8897e4dc58127051f2918f75fa088118e07"
+    },
+    "review-delta": {
+      "source": "tirth8205/code-review-graph",
+      "sourceType": "github",
+      "skillPath": "skills/review-delta/SKILL.md",
+      "computedHash": "4a22d49fa6e43db901779930339a6b9bfd071e6b11fcde00f8540c018c5a3441"
+    },
+    "review-pr": {
+      "source": "tirth8205/code-review-graph",
+      "sourceType": "github",
+      "skillPath": "skills/review-pr/SKILL.md",
+      "computedHash": "d9811ee29d34b8f34d0753d506b5d0548c0994d9d4f0615b2132c480319b90a8"
     },
     "security-and-hardening": {
       "source": "addyosmani/agent-skills",

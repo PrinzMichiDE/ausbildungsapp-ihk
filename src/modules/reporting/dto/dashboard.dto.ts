@@ -1,285 +1,504 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { FruchwarnDto } from './reporting.dto.js';
-
-export class AmpelStatusDto {
-  @ApiProperty({ description: 'Grün ≤7 Tage' })
-  gruen: number;
-
-  @ApiProperty({ description: 'Gelb 8-14 Tage' })
-  gelb: number;
-
-  @ApiProperty({ description: 'Rot >14 Tage' })
-  rot: number;
-}
-
-export class OffeneBerichteDto {
-  @ApiProperty()
-  gesamt: number;
-
-  @ApiProperty({ type: AmpelStatusDto })
-  ampel: AmpelStatusDto;
-
-  @ApiPropertyOptional({ description: 'Ältester offener Bericht in Tagen' })
-  aeltestesInTagen?: number;
-}
-
-export class HalbjahrTrendDto {
-  @ApiProperty({ example: 'erstes', nullable: true })
-  halbjahr: string | null;
-
-  @ApiProperty({ example: 'Mathematik', nullable: true })
-  fach: string | null;
-
-  @ApiProperty({ example: '2025/2026' })
-  zeitraum: string;
-
-  @ApiProperty({ description: 'Gewichteter Durchschnitt' })
-  avgGewichtet: number;
-
-  @ApiProperty()
-  count: number;
-}
-
-export class NotenStatDto {
-  @ApiProperty()
-  anzahl: number;
-
-  @ApiProperty({ description: 'Gewichteter Schnitt SUM(note*gewichtung)/SUM(gewichtung)' })
-  schnittGewichtet: number;
-
-  @ApiProperty({ description: 'Ungewichteter Schnitt' })
-  schnittUngewichtet: number;
-
-  @ApiProperty({ type: [HalbjahrTrendDto] })
-  halbjahrTrends: HalbjahrTrendDto[];
-
-  @ApiPropertyOptional({ type: [HalbjahrTrendDto], description: 'Fach-Zeitreihe sortiert datum asc' })
-  fachTrends?: HalbjahrTrendDto[];
-}
-
-export class ProjektPipelineDto {
-  @ApiProperty()
-  entwurf: number;
-
-  @ApiProperty()
-  eingereicht: number;
-
-  @ApiProperty()
-  freigegeben: number;
-
-  @ApiProperty()
-  abgelehnt: number;
-
-  @ApiProperty()
-  archiviert: number;
-
-  @ApiProperty({ required: false })
-  inPruefung?: number;
-}
-
-export class PruefungFristDto {
-  @ApiProperty()
-  id: string;
-
-  @ApiProperty({ example: 'ap2' })
-  typ: string;
-
-  @ApiProperty()
-  status: string;
-
-  @ApiProperty({ nullable: true, type: Date })
-  ihkTermin: Date | null;
-
-  @ApiProperty({ description: 'Tage bis Termin, negativ wenn überfällig' })
-  faelligInTagen: number | null;
-
-  @ApiPropertyOptional()
-  titel?: string;
-}
-
-export class OnboardingQuoteDto {
-  @ApiProperty()
-  gesamt: number;
-
-  @ApiProperty()
-  erledigt: number;
-
-  @ApiProperty({ description: '0–1' })
-  quote: number;
-}
-
-export class BadgeProgressDto {
-  @ApiProperty()
-  gesamt: number;
-
-  @ApiProperty()
-  earned: number;
-
-  @ApiPropertyOptional({ description: 'Nächstes Badge Titel falls vorhanden' })
-  naechstes?: string;
-}
-
-export class AnwesenheitQuoteDto {
-  @ApiProperty({ description: 'Quote 30 Tage 0–1' })
-  quote30d: number;
-
-  @ApiProperty()
-  fehlTage30d: number;
-
-  @ApiPropertyOptional({ description: 'Quote 90 Tage 0–1' })
-  quote90d?: number;
-}
-
-export class SkillCoverageSummaryDto {
-  @ApiProperty()
-  coverage: number;
-
-  @ApiProperty()
-  freigegeben: number;
-
-  @ApiProperty()
-  used: number;
-}
-
-// ---- Typed Dashboard Results ----
+import { IsEnum, IsOptional, IsString, IsNumber, IsBoolean, IsUUID, IsDateString, Min, Max } from 'class-validator';
+import { GradeStatus, GradeTyp, Halbjahr, Gewichtungskategorie, Pruefungsart, ReportStatus } from '@prisma/client';
+import { WarnTyp } from './reporting.dto.js';
 
 export class AzubiDashboardDto {
-  @ApiProperty({ example: 'azubi' })
-  role: string;
-
-  @ApiProperty({ type: OffeneBerichteDto })
-  offeneBerichte: OffeneBerichteDto;
-
-  @ApiProperty({ type: SkillCoverageSummaryDto })
-  skills: SkillCoverageSummaryDto;
-
-  @ApiProperty({ type: NotenStatDto })
-  noten: NotenStatDto;
-
-  @ApiProperty({ type: ProjektPipelineDto })
-  projekte: ProjektPipelineDto;
-
-  @ApiProperty({ type: [PruefungFristDto] })
-  pruefungen: PruefungFristDto[];
-
-  @ApiProperty({ type: OnboardingQuoteDto })
-  onboarding: OnboardingQuoteDto;
-
-  @ApiProperty({ type: BadgeProgressDto })
-  badges: BadgeProgressDto;
-
-  @ApiProperty({ type: AnwesenheitQuoteDto })
-  anwesenheit: AnwesenheitQuoteDto;
-
   @ApiProperty()
+  role: 'azubi';
+
+  @ApiProperty({ description: 'Offene Berichte nach Ampel' })
+  offeneBerichte: {
+    gesamt: number;
+    ampel: {
+      gruen: number;
+      gelb: number;
+      rot: number;
+    };
+  };
+
+  @ApiProperty({ description: 'Skill Matrix Coverage' })
+  skillCoverage: {
+    frei: number;
+    used: number;
+    coverage: number;
+  };
+
+  @ApiProperty({ description: 'Noten-Zeitreihe' })
+  noten: {
+    anzahl: number;
+    schnittGewichtet: number;
+    halbjahrTrends: {
+      halbjahr: Halbjahr;
+      schnitt: number;
+      fach: string;
+    }[];
+    verteilung: {
+      note1: number;
+      note2: number;
+      note3: number;
+      note4: number;
+      note5: number;
+      note6: number;
+    };
+  };
+
+  @ApiProperty({ description: 'Projekte-Pipeline' })
+  projekte: {
+    entwurf: number;
+    eingereicht: number;
+    freigegeben: number;
+    abgelehnt: number;
+  };
+
+  @ApiProperty({ description: 'Pruefungen' })
+  pruefungen: {
+    naechsteFristen: {
+      id: string;
+      typ: string;
+      frist: Date;
+      status: string;
+    }[];
+  };
+
+  @ApiProperty({ description: 'Onboarding' })
+  onboarding: {
+    erledigt: number;
+    quote: number;
+    naechstes: string;
+  };
+
+  @ApiProperty({ description: 'Badges' })
+  badges: {
+    gesamt: number;
+    naechstes: string;
+  };
+
+  @ApiProperty({ description: 'Abwesenheit' })
+  anwesenheit: {
+    quote30d: number;
+    fehlTage30d: number;
+  };
+
+  @ApiProperty({ description: 'Foerderbedarf offen' })
   foerderbedarfOffen: number;
 
-  @ApiProperty({ type: [FruchwarnDto] })
-  warnings: FruchwarnDto[];
+  @ApiProperty()
+  stats: Record<string, number>;
 
-  // compatibility: also allow stats map
-  @ApiPropertyOptional({ description: 'Legacy stats map für Abwärtskompatibilität' })
-  stats?: Record<string, number>;
+  @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
+  warnings: any[];
 }
 
 export class BeauftragterDashboardDto {
-  @ApiProperty({ example: 'ausbildungsbeauftragter' })
-  role: string;
-
   @ApiProperty()
-  openVisa: number;
+  role: 'ausbildungsbeauftragter';
 
-  @ApiProperty({ type: AmpelStatusDto, description: 'Visa Alter Ampel' })
-  visaAmpel: AmpelStatusDto;
+  @ApiProperty({ description: 'Visa-Antraege nach Ampel' })
+  offeneVisa: {
+    gesamt: number;
+    ampel: {
+      gruen: number;
+      gelb: number;
+      rot: number;
+    };
+  };
 
-  @ApiProperty()
-  kommendeRotationen30d: number;
+  @ApiProperty({ description: 'Rotationen' })
+  rotationen: {
+    naechste30d: number;
+    naechste90d: number;
+    liste: {
+      azubiId: string;
+      name: string;
+      abteilung: string;
+      von: Date;
+      bis: Date;
+    }[];
+  };
 
-  @ApiProperty()
-  kommendeRotationen90d: number;
+  @ApiProperty({ description: 'Skill Coverage nur scoped' })
+  skillCoverage: {
+    courses: {
+      courseId: string;
+      courseTitle: string;
+      used: number;
+      total: number;
+      coverage: number;
+    }[];
+  };
 
-  @ApiProperty({ type: [Object], description: 'Liste [{azubiId,name,abteilung,von}]' })
-  rotationen: Array<{ azubiId: string; name: string; abteilung: string; von: Date }>;
+  @ApiProperty({ description: 'Noten statistisch' })
+  noten: {
+    schnittGewichtet: number;
+    verteilung: {
+      note1: number;
+      note2: number;
+      note3: number;
+      note4: number;
+      note5: number;
+      note6: number;
+    };
+  };
 
-  @ApiProperty({ description: 'Gruppen Notenschnitt gewichtet' })
-  gruppenNotenSchnitt: number;
-
-  @ApiProperty()
-  warnCount: number;
-
-  @ApiProperty()
+  @ApiProperty({ description: 'Foerderbedarf offen' })
   foerderbedarfOffen: number;
 
-  @ApiProperty()
-  feedbackAvgFachkompetenz: number;
+  @ApiProperty({ description: 'Feedback' })
+  feedback: {
+    abteilung: {
+      abteilungId: string;
+      avgFachkompetenz: number;
+      avgSoftskills: number;
+    }[];
+  };
+
+  @ApiProperty({ description: 'Abwesenheiten Abteilung' })
+  abwesenheiten: {
+    count30d: number;
+  };
 
   @ApiProperty()
-  feedbackAvgSoftskills: number;
+  stats: Record<string, number>;
 
-  @ApiProperty()
-  abwesenheiten30d: number;
-
-  @ApiProperty({ type: [FruchwarnDto] })
-  warnings: FruchwarnDto[];
-
-  @ApiPropertyOptional()
-  stats?: Record<string, number>;
+  @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
+  warnings: any[];
 }
 
 export class AusbilderHrDashboardDto {
-  @ApiProperty({ example: 'ausbilder_hr' })
-  role: string;
+  @ApiProperty()
+  role: 'ausbilder' | 'hr';
+
+  @ApiProperty({ description: 'Berichtsheft-Verteilung' })
+  berichtVerteilung: {
+    entwurf: number;
+    eingereicht: number;
+    visiert: number;
+    archiviert: number;
+  };
+
+  @ApiProperty({ description: 'Projekt-Pipeline' })
+  projektPipeline: {
+    entwurf: number;
+    eingereicht: number;
+    freigegeben: number;
+    abgelehnt: number;
+  };
+
+  @ApiProperty({ description: 'Pruefung-Pipeline' })
+  pruefungPipeline: {
+    angemeldet: number;
+    teilgenommen: number;
+    bestanden: number;
+    wiederholung: number;
+  };
+
+  @ApiProperty({ description: 'Foerderbedarf' })
+  foerderbedarf: {
+    offen: number;
+    erledigt: number;
+    nachverfolgungFaellig: number;
+  };
+
+  @ApiProperty({ description: 'Onboarding Coverage' })
+  onboardingQuote: {
+    erledigt: number;
+    gesamt: number;
+  };
+
+  @ApiProperty({ description: 'Gamification' })
+  gamificationCoverage: {
+    badgesAvg: number;
+    topBadgeCount: number;
+  };
+
+  @ApiProperty({ description: 'Abwesenheitsrate' })
+  abwesenheitRate: {
+    rate30d: number;
+    rate90d: number;
+  };
+
+  @ApiProperty({ description: 'Kapazitaetswarnungen' })
+  kapazitaetWarnung: {
+    abteilungen: {
+      abteilungId: string;
+      name: string;
+      planAusbilder: number;
+      istAusbilder: number;
+      status: 'OK' | 'WARNUNG' | 'KRITISCH';
+    }[];
+  };
+
+  @ApiProperty({ description: 'HR-spezifische Daten' })
+  uebernahmePipeline: {
+    geplant: number;
+    geblockt: number;
+    abgeschlossen: number;
+    widerrufen: number;
+  };
+
+  @ApiProperty({ description: 'Alumni-Statistiken' })
+  alumni: {
+    ausgetreten30d: number;
+    loeschungFaellig: number;
+  };
 
   @ApiProperty()
-  azubiGesamt: number;
+  stats: Record<string, number>;
 
-  @ApiProperty({ type: Object, description: 'Verteilung {entwurf, eingereicht, visiert, archiviert}' })
-  berichtVerteilung: Record<string, number>;
+  @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
+  warnings: any[];
+}
 
-  @ApiProperty({ type: ProjektPipelineDto })
-  projektPipeline: ProjektPipelineDto;
+export class SkillGapDto {
+  @ApiProperty()
+  lernfeld: string;
 
-  @ApiProperty({ type: Object, description: 'Prüfungspipeline {angemeldet,teilgenommen,bestanden,wiederholung}' })
-  pruefungPipeline: Record<string, number>;
+  @ApiProperty()
+  frameworkTitel: string;
 
-  @ApiProperty({ type: Object, description: 'Foerderbedarf {offen,erledigt,nachverfolgungFaellig}' })
-  foerderbedarf: Record<string, number>;
+  @ApiProperty()
+  tasksTotal: number;
 
-  @ApiProperty({ type: OnboardingQuoteDto })
-  onboarding: OnboardingQuoteDto;
+  @ApiProperty()
+  reportsUsing: number;
 
-  @ApiProperty({ description: 'Average badges per azubi' })
-  gamificationCoverage: number;
+  @ApiProperty({ description: '0-1' })
+  coverage: number;
 
-  @ApiProperty({ type: AnwesenheitQuoteDto })
-  abwesenheitRate: AnwesenheitQuoteDto;
+  @ApiProperty()
+  istStunden: number;
 
-  @ApiProperty({ type: [Object], description: 'Kapazitätswarnungen [{abteilungId,name,planAusbilder,istAzubis,status}]' })
-  kapazitaetWarnungen: Array<{
-    abteilungId: string;
-    name: string;
-    planAusbilder: number;
-    istAzubis: number;
-    status: string;
-  }>;
+  @ApiProperty({ description: 'Fehlende Tasks' })
+  fehlendeTasks: string[];
 
-  @ApiPropertyOptional({ type: Object, description: 'Nur HR: uebernahmePipeline' })
-  uebernahmePipeline?: Record<string, number>;
+  @ApiProperty({ description: 'Priorität' })
+  priorität: 'hoch' | 'mittel' | 'niedrig';
+}
 
-  @ApiPropertyOptional({ type: Object, description: 'Nur HR: alumniQuote' })
-  alumniQuote?: Record<string, number>;
+export class NotenTrendDto {
+  @ApiProperty()
+  halbjahr: Halbjahr;
+
+  @ApiProperty()
+  fach: string;
+
+  @ApiProperty()
+  zeitraum: string;
+
+  @ApiProperty()
+  schnittGewichtet: number;
+
+  @ApiProperty()
+  noteCount: number;
+}
+
+export class NotenVerteilungDto {
+  @ApiProperty()
+  note1: number;
+
+  @ApiProperty()
+  note2: number;
+
+  @ApiProperty()
+  note3: number;
+
+  @ApiProperty()
+  note4: number;
+
+  @ApiProperty()
+  note5: number;
+
+  @ApiProperty()
+  note6: number;
+}
+
+export class ZeitreiheDto {
+  @ApiProperty()
+  periode: string;
+
+  @ApiProperty()
+  reportQuoteAvg: number;
+
+  @ApiProperty()
+  kompetenzCoverageAvg: number;
 
   @ApiProperty()
   notenSchnitt: number;
-
-  @ApiProperty({ type: [FruchwarnDto] })
-  warnings: FruchwarnDto[];
-
-  @ApiPropertyOptional()
-  stats?: Record<string, number>;
 }
 
-export type TypedDashboardResult =
-  | AzubiDashboardDto
-  | BeauftragterDashboardDto
-  | AusbilderHrDashboardDto;
+export class KohortenDto {
+  @ApiProperty()
+  jahr: number;
+
+  @ApiProperty()
+  beruf: string;
+
+  @ApiProperty()
+  azubiCount: number;
+
+  @ApiProperty()
+  avgNotenSchnittGewichtet: number;
+
+  @ApiProperty()
+  avgReportQuote: number;
+
+  @ApiProperty()
+  avgKompetenzCoverage: number;
+
+  @ApiProperty()
+  avgAbbruchquote: number;
+
+  @ApiProperty()
+  trendNotenSchnitt: number;
+
+  @ApiProperty()
+  trendReportQuote: number;
+}
+
+export class CourseCompletionDto {
+  @ApiProperty()
+  courseId: string;
+
+  @ApiProperty()
+  courseTitle: string;
+
+  @ApiProperty()
+  frameworkTitel: string;
+
+  @ApiProperty({ description: '0-1' })
+  completionRate: number;
+
+  @ApiProperty({ description: 'Time to completion in days' })
+  timeToCompletion: {
+    avg: number;
+    median: number;
+  };
+
+  @ApiProperty({ description: 'Qualitäts-Score Verteilung' })
+  qualitaetsScoreDistribution: {
+    avg: number;
+    histogram: {
+      range0_50: number;
+      range51_70: number;
+      range71_85: number;
+      range86_100: number;
+    };
+  };
+}
+
+export class AlertConfigDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  userId: string;
+
+  @ApiProperty({ enum: WarnTyp })
+  typ: WarnTyp;
+
+  @ApiProperty()
+  schwelle: Record<string, unknown>;
+
+  @ApiProperty()
+  aktiv: boolean;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
+export class CustomReportDto {
+  @ApiProperty()
+  id: string;
+
+  @ApiProperty()
+  name: string;
+
+  @ApiProperty()
+  createdBy: string;
+
+  @ApiProperty()
+  metrics: string[];
+
+  @ApiProperty()
+  timeframe: {
+    von?: string;
+    bis?: string;
+    halbjahr?: string;
+  };
+
+  @ApiProperty()
+  visualizations: string[];
+
+  @ApiProperty()
+  filters: {
+    abteilungId?: string;
+    beruf?: string;
+    halbjahr?: string;
+  };
+
+  @ApiProperty()
+  createdAt: Date;
+}
+
+export class DashboardResult {
+  @ApiProperty()
+  role: string;
+
+@ApiProperty({ type: 'object', additionalProperties: { type: 'number' } })
+  stats: Record<string, number>;
+
+  @ApiProperty({ type: 'array', items: { type: 'object', additionalProperties: true } })
+  warnings: any[];
+}
+
+export enum ReportingExportKind {
+  attendance = 'attendance',
+  grades = 'grades',
+  competency = 'competency',
+  noten_trend = 'noten_trend',
+  skill_gap = 'skill_gap',
+  kohorten = 'kohorten',
+  warnliste = 'warnliste',
+  course_completion = 'course_completion',
+  zeitreihe = 'zeitreihe',
+}
+
+export class ZeitraumDto {
+  @ApiPropertyOptional({ description: 'von ISO Datum' })
+  @IsOptional()
+  @IsString()
+  von?: string;
+
+  @ApiPropertyOptional({ description: 'bis ISO Datum' })
+  @IsOptional()
+  @IsString()
+  bis?: string;
+
+  @ApiPropertyOptional({ description: 'Halbjahr' })
+  @IsOptional()
+  @IsString()
+  halbjahr?: string;
+}
+
+export function toCsv(rows: ReadonlyArray<Record<string, unknown>>): string {
+  if (rows.length === 0) {
+    return '';
+  }
+  const headers = Object.keys(rows[0]);
+  const escape = (value: unknown): string => {
+    const str = value === null || value === undefined ? '' : String(value);
+    if (/[",\n\r]/.test(str)) {
+      return `"${str.replace(/"/g, '""')}"`;
+    }
+    return str;
+  };
+  const lines = [
+    headers.join(','),
+    ...rows.map((row) => headers.map((h) => escape(row[h])).join(',')),
+  ];
+  return lines.join('\r\n');
+}

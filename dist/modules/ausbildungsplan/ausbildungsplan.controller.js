@@ -14,6 +14,7 @@ import { Body, Controller, Delete, Get, Param, Post, Put } from '@nestjs/common'
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../../common/decorators/roles.decorator.js';
 import { Role } from '../../common/constants/roles.js';
+import { CurrentUser } from '../../common/decorators/current-user.type.js';
 import { AusbildungsplanService } from './ausbildungsplan.service.js';
 import { CreateAusbildungsplanDto, UpdateAusbildungsplanDto } from './dto/ausbildungsplan.dto.js';
 let AusbildungsplanController = class AusbildungsplanController {

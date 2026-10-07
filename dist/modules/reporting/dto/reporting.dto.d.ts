@@ -1,11 +1,8 @@
-import { ReportStatus } from '@prisma/client';
-export declare class ReportQuoteDto {
-    azubiId: string;
-    name: string;
-    year: number;
-    kalenderwochen: number;
-    eingereicht: number;
-    quote: number;
+import { Halbjahr, ReportStatus } from '@prisma/client';
+export declare class DashboardResult {
+    role: string;
+    stats: Record<string, number>;
+    warnings: any[];
 }
 export declare class SkillCoverageDto {
     courseId: string;
@@ -22,10 +19,51 @@ export declare class AbteilungsZufriedenheitDto {
     avgFachkompetenz: number;
     avgSoftskills: number;
 }
-export declare enum WarnSeverity {
-    gut = "gut",
-    warnung = "warnung",
-    kritisch = "kritisch"
+export declare class NotenTrendDto {
+    halbjahr: Halbjahr;
+    fach: string;
+    zeitraum: string;
+    schnittGewichtet: number;
+    noteCount: number;
+}
+export declare class NotenVerteilungDto {
+    note1: number;
+    note2: number;
+    note3: number;
+    note4: number;
+    note5: number;
+    note6: number;
+}
+export declare class ZeitreiheDto {
+    periode: string;
+    reportQuoteAvg: number;
+    kompetenzCoverageAvg: number;
+    notenSchnitt: number;
+}
+export declare class KohortenDto {
+    jahr: number;
+    beruf: string;
+    azubiCount: number;
+    avgNotenSchnittGewichtet: number;
+    avgReportQuote: number;
+    avgKompetenzCoverage: number;
+    trendNotenSchnitt: number;
+    trendReportQuote: number;
+}
+export declare class FruchwarnDto {
+    azubiId: string;
+    name: string;
+    type: string;
+    details: string;
+    severity?: string;
+}
+export declare class ReportQuoteDto {
+    azubiId: string;
+    name: string;
+    year: number;
+    kalenderwochen: number;
+    eingereicht: number;
+    quote: number;
 }
 export declare enum WarnTyp {
     note_fruehwarnung = "note_fruehwarnung",
@@ -35,19 +73,6 @@ export declare enum WarnTyp {
     onboarding_rueckstand = "onboarding_rueckstand",
     kapazitaet = "kapazitaet",
     fehlende_aufgaben = "fehlende_aufgaben"
-}
-export declare class FruchwarnDto {
-    azubiId: string;
-    name: string;
-    type: string;
-    details: string;
-    severity?: WarnSeverity;
-    fach?: string;
-}
-export interface DashboardResult {
-    role: string;
-    stats: Record<string, number>;
-    warnings: FruchwarnDto[];
 }
 export declare enum ReportingExportKind {
     attendance = "attendance",
@@ -60,6 +85,9 @@ export declare enum ReportingExportKind {
     course_completion = "course_completion",
     zeitreihe = "zeitreihe"
 }
+export declare class ExportKindDto {
+    kind: ReportingExportKind;
+}
 export declare class ExportQueryDto {
     status?: ReportStatus;
     jahr?: string;
@@ -67,9 +95,6 @@ export declare class ExportQueryDto {
     noCache?: string;
     fach?: string;
     abteilungId?: string;
-}
-export declare class ExportKindDto {
-    kind: ReportingExportKind;
 }
 export declare class ZeitraumDto {
     von?: string;

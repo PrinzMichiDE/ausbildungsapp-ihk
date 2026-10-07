@@ -15,6 +15,20 @@ import {
   MinLength,
 } from 'class-validator';
 
+export enum AttachmentTyp {
+  screenshot = 'screenshot',
+  diagramm = 'diagramm',
+  code = 'code',
+  sonstiges = 'sonstiges',
+}
+
+export enum KommentarArt {
+  allgemein = 'allgemein',
+  fachlich = 'fachlich',
+  formal = 'formal',
+  aufgabenkopplung = 'aufgabenkopplung',
+}
+
 export class CreateReportDto {
   @ApiProperty({ example: 'KW 12 – Netzwerkinfrastruktur' })
   @IsString()
@@ -177,20 +191,6 @@ export class ReportResponseDto {
 
   @ApiProperty()
   createdAt: Date;
-}
-
-export enum AttachmentTyp {
-  screenshot = 'screenshot',
-  diagramm = 'diagramm',
-  code = 'code',
-  sonstiges = 'sonstiges',
-}
-
-export enum KommentarArt {
-  allgemein = 'allgemein',
-  fachlich = 'fachlich',
-  formal = 'formal',
-  aufgabenkopplung = 'aufgabenkopplung',
 }
 
 export class AddAttachmentDto {

@@ -7,31 +7,196 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
-import { ForbiddenException, Injectable, NotFoundException, } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { Role } from '../../common/constants/roles.js';
 import { ERROR_CODES } from '../../common/constants/error-codes.js';
+import { AuditService } from '../../modules/audit/audit.service.js';
+import { NotificationsService } from '../../modules/notifications/notifications.service.js';
+import { buildSimplePdf } from '../../common/utils/pdf.js';
+import { NotificationCategory } from '@prisma/client';
 let NotenService = class NotenService {
     prisma;
     scope;
-    constructor(prisma, scope) {
+    audit;
+    notifications;
+    constructor(prisma, scope, audit, notifications) {
         this.prisma = prisma;
         this.scope = scope;
+        this.audit = audit;
+        this.notifications = notifications;
+    }
+    async create(currentUser, dto) {
+        if (!this.canManage(currentUser)) {
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen Noten erfassen' });
+        }
+        const azubiId = dto.azubiId ?? currentUser.azubiId;
+        if (!azubiId)
+            throw new ForbiddenException({ errorCode: ERROR_CODES.BAD_REQUEST, message: 'azubiId ist erforderlich' });
+        await this.scope.assertCanAccessAzubi(currentUser, azubiId);
+        const grade = await this.prisma.grade.create({
+            data: {
+                azubiId, fach: dto.fach, note: dto.note, zeitraum: dto.zeitraum,
+                halbjahr: dto.halbjahr ?? null, datum: dto.datum ?? null,
+                pruefungsart: dto.pruefungsart ?? null, gewichtung: dto.gewichtung ?? 1.0,
+                gewichtungsKategorie: dto.gewichtungsKategorie ?? null, typ: dto.typ ?? 'note',
+                beschreibung: dto.beschreibung ?? null, bemerkungen: dto.bemerkungen ?? null,
+                prueferId: dto.prueferId ?? null, pruefungsdatum: dto.pruefungsdatum ?? null,
+                wiederholung: dto.wiederholung ?? false, maßnahme: dto.maßnahme ?? null,
+                zeugnisUrl: dto.zeugnisUrl ?? null, quellenUrl: dto.quellenUrl ?? null,
+                kursId: dto.kursId ?? null,
+            },
+        });
+        await this.audit.create(currentUser, { action: 'grade.create', entity: 'Grade', entityId: grade.id, details: JSON.stringify({ fach: grade.fach, note: grade.note }) });
+        return this.toResponse(grade);
+    }
+    async findAll(currentUser) {
+        const where = await this.scopeWhere(currentUser);
+        const items = await this.prisma.grade.findMany({ where, orderBy: { zeitraum: 'desc' } });
+        return items.map((g) => this.toResponse(g));
+    }
+    async findOne(id, currentUser) {
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        await this.scope.assertCanAccessAzubi(currentUser, grade.azubiId);
+        return this.toResponse(grade);
+    }
+    async remove(id, currentUser) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen Noten löschen' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status === 'archiviert')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Archivierte Noten können nicht gelöscht werden' });
+        await this.prisma.grade.delete({ where: { id } });
+        await this.audit.create(currentUser, { action: 'grade.delete', entity: 'Grade', entityId: id, details: JSON.stringify({ fach: grade.fach }) });
+    }
+    async getWarnliste(currentUser) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR' });
+        const where = await this.scopeWhere(currentUser);
+        const grades = await this.prisma.grade.findMany({ where: { ...where, note: { gte: 3 } }, orderBy: { note: 'desc' } });
+        return {
+            kritisch: grades.filter((g) => g.note >= 5).map((g) => ({ ...g, warnstufe: 'kritisch' })),
+            warnung: grades.filter((g) => g.note >= 4 && g.note < 5).map((g) => ({ ...g, warnstufe: 'warnung' })),
+            gut: grades.filter((g) => g.note >= 3 && g.note < 4).map((g) => ({ ...g, warnstufe: 'gut' })),
+            gesamt: grades.length,
+        };
+    }
+    async confirm(id, currentUser) {
+        if (!currentUser.roles.includes(Role.ausbilder))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder dürfen Noten bestätigen' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status !== 'entwurf')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Entwürfe können bestätigt werden' });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { status: 'bestaetigt' } });
+        await this.createVersion(updated);
+        await this.audit.create(currentUser, { action: 'grade.status_change', entity: 'Grade', entityId: id, details: JSON.stringify({ from: 'entwurf', to: 'bestaetigt' }) });
+        await this.notifications.create({
+            userId: updated.azubiId,
+            category: NotificationCategory.review,
+            title: 'Note bestätigt',
+            message: `Ihre Note in ${updated.fach} wurde bestätigt.`,
+            priority: 'medium',
+            referenceType: 'Grade',
+            referenceId: id,
+        });
+        return this.toResponse(updated);
+    }
+    async visieren(id, currentUser) {
+        if (!currentUser.roles.includes(Role.ausbilder))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder dürfen final visieren' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status !== 'bestaetigt')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur bestätigte Noten können visiert werden' });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { status: 'visiert' } });
+        await this.createVersion(updated);
+        await this.audit.create(currentUser, { action: 'grade.status_change', entity: 'Grade', entityId: id, details: JSON.stringify({ from: 'bestaetigt', to: 'visiert' }) });
+        await this.notifications.create({
+            userId: updated.azubiId,
+            category: NotificationCategory.review,
+            title: 'Note visiert',
+            message: `Ihre Note in ${updated.fach} wurde visiert.`,
+            priority: 'medium',
+            referenceType: 'Grade',
+            referenceId: id,
+        });
+        return this.toResponse(updated);
+    }
+    async archivieren(id, currentUser) {
+        if (!currentUser.roles.includes(Role.ausbilder))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder dürfen archivieren' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status !== 'visiert')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur visierte Noten können archiviert werden' });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { status: 'archiviert' } });
+        await this.createVersion(updated);
+        await this.audit.create(currentUser, { action: 'grade.status_change', entity: 'Grade', entityId: id, details: JSON.stringify({ from: 'visiert', to: 'archiviert' }) });
+        await this.notifications.create({
+            userId: updated.azubiId,
+            category: NotificationCategory.review,
+            title: 'Note archiviert',
+            message: `Ihre Note in ${updated.fach} wurde archiviert.`,
+            priority: 'medium',
+            referenceType: 'Grade',
+            referenceId: id,
+        });
+        return this.toResponse(updated);
+    }
+    async bewerten(id, currentUser, dto) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen bewerten' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { bewertung: dto.bewertung, bewertetVon: currentUser.id, bewertetAm: new Date(), pruefungsdatum: dto.pruefungsdatum ?? null } });
+        await this.audit.create(currentUser, { action: 'grade.bewerten', entity: 'Grade', entityId: id, details: JSON.stringify({ bewertung: dto.bewertung }) });
+        return this.toResponse(updated);
+    }
+    async zeugnisUpload(id, currentUser, dto) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen Zeugnisse hochladen' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status === 'archiviert')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Archivierte Noten können nicht mehr geändert werden' });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { zeugnisUrl: dto.zeugnisUrl } });
+        await this.audit.create(currentUser, { action: 'grade.zeugnis_upload', entity: 'Grade', entityId: id, details: JSON.stringify({ zeugnisUrl: dto.zeugnisUrl }) });
+        return this.toResponse(updated);
+    }
+    async wiederholung(id, currentUser, dto) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen Wiederholungen dokumentieren' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { wiederholung: true, maßnahme: dto.maßnahme ?? null } });
+        await this.audit.create(currentUser, { action: 'grade.wiederholung', entity: 'Grade', entityId: id, details: JSON.stringify({ maßnahme: dto.maßnahme }) });
+        return this.toResponse(updated);
+    }
+    async addMaßnahme(id, currentUser, dto) {
+        if (!this.canManage(currentUser))
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR dürfen Fördermaßnahmen dokumentieren' });
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        const updated = await this.prisma.grade.update({ where: { id }, data: { maßnahme: dto.maßnahme } });
+        await this.audit.create(currentUser, { action: 'grade.maßnahme', entity: 'Grade', entityId: id, details: JSON.stringify({ maßnahme: dto.maßnahme }) });
+        return this.toResponse(updated);
     }
     async getVersions(id, currentUser) {
         await this.scope.assertCanAccessAzubi(currentUser, id);
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        const versions = await this.prisma.gradeVersion.findMany({
-            where: { gradeId: id },
-            orderBy: { version: 'asc' },
-        });
+        const versions = await this.prisma.gradeVersion.findMany({ where: { gradeId: id }, orderBy: { version: 'asc' } });
         return versions.map((v) => this.toVersionResponse(v));
     }
     async getDiff(id, currentUser, v1, v2) {
@@ -44,14 +209,12 @@ let NotenService = class NotenService {
     }
     async getGPA(azubiId, currentUser) {
         await this.scope.assertCanAccessAzubi(currentUser, azubiId);
-        const grades = await this.prisma.grade.findMany({
-            where: { azubiId, status: { in: ['bestaetigt', 'visiert', 'archiviert'] } },
-        });
+        const grades = await this.prisma.grade.findMany({ where: { azubiId, status: { in: ['bestaetigt', 'visiert', 'archiviert'] } } });
         if (grades.length === 0)
             return { gesamt: 0, erstesHalbjahr: null, zweitesHalbjahr: null, anzahlNoten: 0 };
-        const gewichteteSumme = grades.reduce((s, g) => s + (g.note * (g.gewichtung ?? 1.0)), 0);
-        const gesamtGewichtung = grades.reduce((s, g) => s + (g.gewichtung ?? 1.0), 0);
-        const gesamt = gesamtGewichtung > 0 ? Math.round((gewichteteSumme / gesamtGewichtung) * 100) / 100 : 0;
+        const gS = grades.reduce((s, g) => s + (g.note * (g.gewichtung ?? 1.0)), 0);
+        const gW = grades.reduce((s, g) => s + (g.gewichtung ?? 1.0), 0);
+        const gesamt = gW > 0 ? Math.round((gS / gW) * 100) / 100 : 0;
         const erstes = grades.filter((g) => g.halbjahr === 'erstes');
         const zweites = grades.filter((g) => g.halbjahr === 'zweites');
         const erstesGPA = erstes.length > 0 ? Math.round((erstes.reduce((s, g) => s + g.note * (g.gewichtung ?? 1.0), 0) / erstes.reduce((s, g) => s + (g.gewichtung ?? 1.0), 0)) * 100) / 100 : null;
@@ -68,11 +231,11 @@ let NotenService = class NotenService {
             where.zeitraum = filter.zeitraum;
         const [noten, anzahlProStatus] = await this.prisma.$transaction([
             this.prisma.grade.findMany({ where, orderBy: { zeitraum: 'desc' } }),
-            this.prisma.grade.groupBy({ by: ['status'], where, _count: { _all: true } }),
+            this.prisma.grade.groupBy({ by: ['status'], where, orderBy: { status: 'asc' }, _count: { id: true } }),
         ]);
         const statusMap = {};
         for (const g of anzahlProStatus)
-            statusMap[g.status] = (g._count?._all ?? 0);
+            statusMap[g.status] = g._count.id;
         const fachMap = {};
         for (const g of noten) {
             if (!fachMap[g.fach])
@@ -84,274 +247,117 @@ let NotenService = class NotenService {
             fachDurchschnitte[fach] = Math.round((n.reduce((a, b) => a + b, 0) / n.length) * 100) / 100;
         return { zusammenfassung: { insgesamt: noten.length, nachStatus: statusMap, nachFach: fachDurchschnitte }, noten };
     }
-    async getWarnliste(currentUser) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur Ausbilder/HR' });
-        }
-        const where = (await this.scopeWhere(currentUser));
-        const grades = await this.prisma.grade.findMany({ where: { ...where, note: { gte: 3 } }, orderBy: { note: 'desc' } });
-        return {
-            kritisch: grades.filter((g) => g.note >= 5).map((g) => ({ ...g, warnstufe: 'kritisch' })),
-            warnung: grades.filter((g) => g.note >= 4 && g.note < 5).map((g) => ({ ...g, warnstufe: 'warnung' })),
-            gut: grades.filter((g) => g.note >= 3 && g.note < 4).map((g) => ({ ...g, warnstufe: 'gut' })),
-            gesamt: grades.length,
-        };
-    }
-    async create(currentUser, dto) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen Noten erfassen',
-            });
-        }
-        const azubiId = dto.azubiId ?? currentUser.azubiId;
-        if (!azubiId) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.BAD_REQUEST,
-                message: 'azubiId ist erforderlich',
-            });
-        }
-        await this.scope.assertCanAccessAzubi(currentUser, azubiId);
-        const grade = await this.prisma.grade.create({
-            data: {
-                azubiId,
-                fach: dto.fach,
-                note: dto.note,
-                zeitraum: dto.zeitraum,
-                halbjahr: dto.halbjahr ?? null,
-                datum: dto.datum ?? null,
-                pruefungsart: dto.pruefungsart ?? null,
-                gewichtung: dto.gewichtung ?? 1.0,
-                gewichtungsKategorie: dto.gewichtungsKategorie ?? null,
-                typ: dto.typ ?? 'note',
-                beschreibung: dto.beschreibung ?? null,
-                bemerkungen: dto.bemerkungen ?? null,
-                prueferId: dto.prueferId ?? null,
-                pruefungsdatum: dto.pruefungsdatum ?? null,
-                wiederholung: dto.wiederholung ?? false,
-                maßnahme: dto.maßnahme ?? null,
-                zeugnisUrl: dto.zeugnisUrl ?? null,
-                quellenUrl: dto.quellenUrl ?? null,
-                kursId: dto.kursId ?? null,
-            },
-        });
-        return this.toResponse(grade);
-    }
-    async findAll(currentUser) {
+    async exportCsv(currentUser, azubiId) {
         const where = await this.scopeWhere(currentUser);
-        const items = await this.prisma.grade.findMany({
-            where,
-            orderBy: { zeitraum: 'desc' },
-        });
-        return items.map((g) => this.toResponse(g));
-    }
-    async findOne(id, currentUser) {
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
+        if (azubiId) {
+            await this.scope.assertCanAccessAzubi(currentUser, azubiId);
+            where.azubiId = azubiId;
         }
+        const grades = await this.prisma.grade.findMany({ where, orderBy: { zeitraum: 'desc' } });
+        const headers = ['fach', 'note', 'zeitraum', 'halbjahr', 'typ', 'gewichtung', 'gewichtungsKategorie', 'status', 'datum', 'pruefungsart', 'wiederholung', 'maßnahme', 'zeugnisUrl', 'bewertung', 'bewertetAm', 'createdAt'];
+        const rows = grades.map((g) => [
+            g.fach, g.note.toString(), g.zeitraum, g.halbjahr ?? '', g.typ, (g.gewichtung ?? 1.0).toString(),
+            g.gewichtungsKategorie ?? '', g.status, g.datum?.toISOString() ?? '', g.pruefungsart ?? '',
+            g.wiederholung ? 'true' : '', g.maßnahme ?? '', g.zeugnisUrl ?? '', g.bewertung ?? '',
+            g.bewertetAm?.toISOString() ?? '', g.createdAt.toISOString(),
+        ].map((v) => `"${String(v).replace(/"/g, '""')}"`).join(';'));
+        return [headers.join(';'), ...rows].join('\n');
+    }
+    async exportPdf(currentUser, id) {
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
         await this.scope.assertCanAccessAzubi(currentUser, grade.azubiId);
-        return this.toResponse(grade);
+        const lines = [
+            `Zeugnis: ${grade.fach}`,
+            `Note: ${grade.note}`,
+            `Zeitraum: ${grade.zeitraum}`,
+            `Halbjahr: ${grade.halbjahr ?? '—'}`,
+            `Typ: ${grade.typ}`,
+            `Gewichtung: ${grade.gewichtung ?? 1.0}`,
+            `Status: ${grade.status}`,
+            `Datum: ${grade.datum?.toISOString() ?? '—'}`,
+            `Prüfungsart: ${grade.pruefungsart ?? '—'}`,
+            `Wiederholung: ${grade.wiederholung ? 'Ja' : 'Nein'}`,
+            `Bewertung: ${grade.bewertung ?? '—'}`,
+            `Bewertet von: ${grade.bewertetVon ?? '—'}`,
+            `Bewertet am: ${grade.bewertetAm?.toISOString() ?? '—'}`,
+        ];
+        return buildSimplePdf(`Zeugnis — ${grade.fach}`, lines);
     }
-    async remove(id, currentUser) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen Noten löschen',
-            });
+    async exportDsgvo(currentUser, azubiId) {
+        if (!currentUser.roles.includes(Role.hr) && !currentUser.roles.includes(Role.admin)) {
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur HR/Admin dürfen DSGVO-Export' });
+        }
+        const grades = await this.prisma.grade.findMany({ where: { azubiId } });
+        const data = grades.map((g) => ({
+            id: g.id, fach: g.fach, note: g.note, zeitraum: g.zeitraum, halbjahr: g.halbjahr,
+            typ: g.typ, status: g.status, datum: g.datum, pruefungsart: g.pruefungsart,
+            gewichtung: g.gewichtung, bewertung: g.bewertung, bewertetVon: g.bewertetVon,
+            bewertetAm: g.bewertetAm, wiederholung: g.wiederholung, maßnahme: g.maßnahme,
+            zeugnisUrl: g.zeugnisUrl, quellenUrl: g.quellenUrl, kursId: g.kursId,
+            createdAt: g.createdAt, updatedAt: g.updatedAt,
+        }));
+        return JSON.stringify(data, null, 2);
+    }
+    async anonymizeDsgvo(currentUser, id) {
+        if (!currentUser.roles.includes(Role.hr) && !currentUser.roles.includes(Role.admin)) {
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur HR/Admin dürfen DSGVO-Anonymisierung' });
         }
         const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        await this.prisma.grade.update({
+            where: { id },
+            data: {
+                azubiId: `anonymized-${id}`,
+                fach: `anonymized-${grade.fach}`,
+                bemerkungen: null,
+                maßnahme: null,
+                beschreibung: null,
+                quellenUrl: null,
+                zeugnisUrl: null,
+            },
+        });
+        await this.audit.create(currentUser, { action: 'grade.anonymize', entity: 'Grade', entityId: id, details: JSON.stringify({ reason: 'DSGVO' }) });
+    }
+    async deleteDsgvo(currentUser, id) {
+        if (!currentUser.roles.includes(Role.hr) && !currentUser.roles.includes(Role.admin)) {
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Nur HR/Admin dürfen DSGVO-Löschung' });
         }
+        const grade = await this.prisma.grade.findUnique({ where: { id } });
+        if (!grade)
+            throw new NotFoundException({ errorCode: ERROR_CODES.GRADE_NOT_FOUND, message: `Note ${id} nicht gefunden` });
+        if (grade.status === 'archiviert')
+            throw new ForbiddenException({ errorCode: ERROR_CODES.ACCESS_DENIED, message: 'Archivierte Noten können nicht gelöscht werden (Art. 17 Ausnahmeregelung)' });
         await this.prisma.grade.delete({ where: { id } });
+        await this.audit.create(currentUser, { action: 'grade.delete', entity: 'Grade', entityId: id, details: JSON.stringify({ reason: 'DSGVO Art.17' }) });
     }
-    async confirm(id, currentUser) {
-        if (!currentUser.roles.includes(Role.ausbilder)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder dürfen Noten bestätigen',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        if (grade.status !== 'entwurf') {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Entwürfe können bestätigt werden',
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: { status: 'bestaetigt' },
-        });
-        return this.toResponse(updated);
-    }
-    async visieren(id, currentUser) {
-        if (!currentUser.roles.includes(Role.ausbilder)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder dürfen final visieren',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        if (grade.status !== 'bestaetigt') {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur bestätigte Noten können visiert werden',
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: { status: 'visiert' },
-        });
-        return this.toResponse(updated);
-    }
-    async archivieren(id, currentUser) {
-        if (!currentUser.roles.includes(Role.ausbilder)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder dürfen archivieren',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        if (grade.status !== 'visiert') {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur visierte Noten können archiviert werden',
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: { status: 'archiviert' },
-        });
-        return this.toResponse(updated);
-    }
-    async bewerten(id, currentUser, dto) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen bewerten',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
+    async createVersion(grade) {
+        const versions = await this.prisma.gradeVersion.findMany({ where: { gradeId: grade.id }, orderBy: { version: 'desc' }, take: 1 });
+        const nextVersion = versions.length > 0 ? versions[0].version + 1 : 1;
+        await this.prisma.gradeVersion.create({
             data: {
-                bewertung: dto.bewertung,
-                bewertetVon: currentUser.id,
-                bewertetAm: new Date(),
-                pruefungsdatum: dto.pruefungsdatum ?? null,
+                gradeId: grade.id, version: nextVersion,
+                fach: grade.fach, note: grade.note, status: grade.status,
+                zeitraum: grade.zeitraum, halbjahr: grade.halbjahr,
+                datum: grade.datum, pruefungsart: grade.pruefungsart,
+                gewichtung: grade.gewichtung ?? 1.0,
+                gewichtungsKategorie: grade.gewichtungsKategorie,
+                typ: grade.typ, bemerkungen: grade.bemerkungen,
+                prueferId: grade.prueferId, pruefungsdatum: grade.pruefungsdatum,
+                wiederholung: grade.wiederholung, maßnahme: grade.maßnahme,
+                zeugnisUrl: grade.zeugnisUrl, bewertetVon: grade.bewertetVon,
+                bewertetAm: grade.bewertetAm, erstelltVon: grade.bewertetVon,
             },
         });
-        return this.toResponse(updated);
-    }
-    async zeugnisUpload(id, currentUser, dto) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen Zeugnisse hochladen',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        if (grade.status === 'archiviert') {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Archivierte Noten können nicht mehr geändert werden',
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: { zeugnisUrl: dto.zeugnisUrl },
-        });
-        return this.toResponse(updated);
-    }
-    async wiederholung(id, currentUser, dto) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen Wiederholungen dokumentieren',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: {
-                wiederholung: true,
-                maßnahme: dto.maßnahme ?? null,
-            },
-        });
-        return this.toResponse(updated);
-    }
-    async addMaßnahme(id, currentUser, dto) {
-        if (!this.canManage(currentUser)) {
-            throw new ForbiddenException({
-                errorCode: ERROR_CODES.ACCESS_DENIED,
-                message: 'Nur Ausbilder/HR dürfen Fördermaßnahmen dokumentieren',
-            });
-        }
-        const grade = await this.prisma.grade.findUnique({ where: { id } });
-        if (!grade) {
-            throw new NotFoundException({
-                errorCode: ERROR_CODES.GRADE_NOT_FOUND,
-                message: `Note ${id} nicht gefunden`,
-            });
-        }
-        const updated = await this.prisma.grade.update({
-            where: { id },
-            data: { maßnahme: dto.maßnahme },
-        });
-        return this.toResponse(updated);
     }
     async scopeWhere(currentUser) {
-        if (currentUser.roles.includes(Role.azubi) && currentUser.azubiId) {
+        if (currentUser.roles.includes(Role.azubi) && currentUser.azubiId)
             return { azubiId: currentUser.azubiId };
-        }
         const visible = await this.scope.getVisibleAzubiIds(currentUser);
-        if (visible === 'ALL') {
+        if (visible === 'ALL')
             return {};
-        }
         return { azubiId: { in: [...visible] } };
     }
     canManage(user) {
@@ -359,66 +365,34 @@ let NotenService = class NotenService {
     }
     toResponse(g) {
         return {
-            id: g.id,
-            azubiId: g.azubiId,
-            fach: g.fach,
-            note: g.note,
-            zeitraum: g.zeitraum,
-            halbjahr: g.halbjahr,
-            datum: g.datum,
-            pruefungsart: g.pruefungsart,
-            gewichtung: g.gewichtung ?? 1.0,
-            gewichtungsKategorie: g.gewichtungsKategorie,
-            typ: g.typ,
-            status: g.status,
-            beschreibung: g.beschreibung,
-            bemerkungen: g.bemerkungen,
-            prueferId: g.prueferId,
-            pruefungsdatum: g.pruefungsdatum,
-            wiederholung: g.wiederholung,
-            maßnahme: g.maßnahme,
-            zeugnisUrl: g.zeugnisUrl,
-            quellenUrl: g.quellenUrl,
-            kursId: g.kursId,
-            bewertetVon: g.bewertetVon,
-            bewertetAm: g.bewertetAm,
-            bewertung: g.bewertung ?? null,
-            createdAt: g.createdAt,
-            updatedAt: g.updatedAt,
+            id: g.id, azubiId: g.azubiId, fach: g.fach, note: g.note, zeitraum: g.zeitraum,
+            halbjahr: g.halbjahr, datum: g.datum, pruefungsart: g.pruefungsart,
+            gewichtung: g.gewichtung ?? 1.0, gewichtungsKategorie: g.gewichtungsKategorie,
+            typ: g.typ, status: g.status, beschreibung: g.beschreibung,
+            bemerkungen: g.bemerkungen, prueferId: g.prueferId, pruefungsdatum: g.pruefungsdatum,
+            wiederholung: g.wiederholung, maßnahme: g.maßnahme, zeugnisUrl: g.zeugnisUrl,
+            quellenUrl: g.quellenUrl, kursId: g.kursId, bewertetVon: g.bewertetVon,
+            bewertetAm: g.bewertetAm, bewertung: g.bewertung ?? null, createdAt: g.createdAt, updatedAt: g.updatedAt,
         };
     }
     toVersionResponse(v) {
         return {
-            id: v.id,
-            gradeId: v.gradeId,
-            version: v.version,
-            fach: v.fach,
-            note: v.note,
-            status: v.status,
-            zeitraum: v.zeitraum,
-            halbjahr: v.halbjahr,
-            datum: v.datum,
-            pruefungsart: v.pruefungsart,
-            gewichtung: v.gewichtung ?? 1.0,
-            gewichtungsKategorie: v.gewichtungsKategorie,
-            typ: v.typ,
-            bemerkungen: v.bemerkungen,
-            prueferId: v.prueferId,
-            pruefungsdatum: v.pruefungsdatum,
-            wiederholung: v.wiederholung,
-            maßnahme: v.maßnahme,
-            zeugnisUrl: v.zeugnisUrl,
-            bewertetVon: v.bewertetVon,
-            bewertetAm: v.bewertetAm,
-            erstelltVon: v.erstelltVon,
-            createdAt: v.createdAt,
+            id: v.id, gradeId: v.gradeId, version: v.version, fach: v.fach, note: v.note,
+            status: v.status, zeitraum: v.zeitraum, halbjahr: v.halbjahr,
+            datum: v.datum, pruefungsart: v.pruefungsart, gewichtung: v.gewichtung ?? 1.0,
+            gewichtungsKategorie: v.gewichtungsKategorie, typ: v.typ,
+            bemerkungen: v.bemerkungen, prueferId: v.prueferId, pruefungsdatum: v.pruefungsdatum,
+            wiederholung: v.wiederholung, maßnahme: v.maßnahme, zeugnisUrl: v.zeugnisUrl,
+            bewertetVon: v.bewertetVon, bewertetAm: v.bewertetAm, erstelltVon: v.erstelltVon, createdAt: v.createdAt,
         };
     }
 };
 NotenService = __decorate([
     Injectable(),
     __metadata("design:paramtypes", [PrismaService,
-        AccessScopeService])
+        AccessScopeService,
+        AuditService,
+        NotificationsService])
 ], NotenService);
 export { NotenService };
 //# sourceMappingURL=grades.service.js.map

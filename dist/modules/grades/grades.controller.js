@@ -10,7 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-import { Body, Controller, Delete, Get, Param, Post, Query, } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Res, HttpCode, } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
 import { Roles } from '../../common/decorators/roles.decorator.js';
@@ -69,6 +69,25 @@ let NotenController = class NotenController {
     }
     async remove(id, user) {
         await this.service.remove(id, user);
+    }
+    async exportCsv(user, query) {
+        const csv = await this.service.exportCsv(user, query?.azubiId);
+        return csv;
+    }
+    async exportPdf(id, user, res) {
+        const pdf = await this.service.exportPdf(user, id);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="zeugnis-${id}.pdf"`);
+        res.send(pdf);
+    }
+    async exportDsgvo(id, user) {
+        return this.service.exportDsgvo(user, id);
+    }
+    async anonymizeDsgvo(id, user) {
+        await this.service.anonymizeDsgvo(user, id);
+    }
+    async deleteDsgvo(azubiId, user) {
+        await this.service.deleteDsgvo(user, azubiId);
     }
 };
 __decorate([
@@ -245,6 +264,63 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], NotenController.prototype, "remove", null);
+__decorate([
+    ApiOperation({ summary: 'CSV-Export der Noten' }),
+    ApiResponse({ status: 200, description: 'CSV-Daten' }),
+    Roles(Role.ausbilder, Role.hr),
+    Get('export/csv'),
+    __param(0, CurrentUser()),
+    __param(1, Query()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], NotenController.prototype, "exportCsv", null);
+__decorate([
+    ApiOperation({ summary: 'PDF-Zeugnis generieren' }),
+    ApiResponse({ status: 200, description: 'PDF-Buffer' }),
+    Roles(Role.ausbilder, Role.hr),
+    Get(':id/export/pdf'),
+    HttpCode(200),
+    __param(0, Param('id')),
+    __param(1, CurrentUser()),
+    __param(2, Res()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], NotenController.prototype, "exportPdf", null);
+__decorate([
+    ApiOperation({ summary: 'DSGVO-Export aller Notendaten eines Azubis' }),
+    ApiResponse({ status: 200, description: 'JSON-Daten' }),
+    Roles(Role.hr, Role.admin),
+    Get(':id/export/datenschutz'),
+    __param(0, Param('id')),
+    __param(1, CurrentUser()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], NotenController.prototype, "exportDsgvo", null);
+__decorate([
+    ApiOperation({ summary: 'DSGVO-Anonymisierung einer Note' }),
+    ApiResponse({ status: 200, description: 'Anonymisiert' }),
+    Roles(Role.hr, Role.admin),
+    Delete(':id/datenschutz'),
+    __param(0, Param('id')),
+    __param(1, CurrentUser()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], NotenController.prototype, "anonymizeDsgvo", null);
+__decorate([
+    ApiOperation({ summary: 'DSGVO-Löschung einer Note (Art.17)' }),
+    ApiResponse({ status: 204, description: 'Gelöscht' }),
+    Roles(Role.hr, Role.admin),
+    Delete(':id/datenschutz/:azubiId'),
+    __param(0, Param('azubiId')),
+    __param(1, CurrentUser()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], NotenController.prototype, "deleteDsgvo", null);
 NotenController = __decorate([
     ApiTags('noten'),
     ApiBearerAuth(),
