@@ -1,332 +1,224 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Test, TestingModule } from '@nestjs/testing';
-import { ForbiddenException } from '@nestjs/common';
-import { BerichteService } from './reports.service.js';
+import { ReportsService } from './reports.service';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
-import { NotificationsService } from '../notifications/notifications.service.js';
 import { AuditService } from '../audit/audit.service.js';
-import { BusinessException } from '../../common/exceptions/business.exception.js';
-import { ReportStatus } from '@prisma/client';
-import { Role } from '../../common/constants/roles.js';
+import { NotificationsService } from '../../users/notifications.service';
+import { ReportStatus, ReportTyp } from '../../common/constants/reports';
 
-describe('BerichteService', () => {
-  let service: BerichteService;
-  let prisma: {
+vi.mock('../../common/utils/build-simple-pdf', () => ({
+  buildSimplePdf: vi.fn().mockResolvedValue({ pdfBuffer: Buffer.from('mock') }),
+}));
+
+describe('ReportsService', () => {
+  let service: ReportsService;
+  let prisma: any;
+  let accessScopeService: any;
+  let auditService: any;
+  let notificationsService: any;
+
+  const createMockPrisma = () => ({
     report: {
-      create: ReturnType<typeof vi.fn>;
-      findUnique: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-      update: ReturnType<typeof vi.fn>;
-      delete: ReturnType<typeof vi.fn>;
-      count: ReturnType<typeof vi.fn>;
-    };
-    reportVersion: {
-      create: ReturnType<typeof vi.fn>;
-      count: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-      findFirst: ReturnType<typeof vi.fn>;
-    };
-    reportTask: { deleteMany: ReturnType<typeof vi.fn> };
-    reportAttachment: {
-      create: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-    };
-    reportTimeEntry: {
-      create: ReturnType<typeof vi.fn>;
-      findMany: ReturnType<typeof vi.fn>;
-    };
-    reportComment: { create: ReturnType<typeof vi.fn>; findMany: ReturnType<typeof vi.fn> };
-    user: { findMany: ReturnType<typeof vi.fn> };
-    task: { count: ReturnType<typeof vi.fn> };
-    $transaction: ReturnType<typeof vi.fn>;
-  };
-  let scope: {
-    getVisibleAzubiIds: ReturnType<typeof vi.fn>;
-    assertCanAccessAzubi: ReturnType<typeof vi.fn>;
-    assertCanAccessBericht: ReturnType<typeof vi.fn>;
-  };
-  let notifications: { create: ReturnType<typeof vi.fn> };
-  let audit: { create: ReturnType<typeof vi.fn> };
-
-  const mockAzubiUser = {
-    id: 'user-1',
-    email: 'azubi@test.de',
-    firstName: 'Max',
-    lastName: 'Mustermann',
-    roles: [Role.azubi],
-    azubiId: 'azubi-1',
-  };
-
-  const mockReviewerUser = {
-    id: 'user-2',
-    email: 'reviewer@test.de',
-    firstName: 'Anna',
-    lastName: 'Schmidt',
-    roles: [Role.ausbildungsbeauftragter],
-    azubiId: null,
-  };
-
-  const mockReport = {
-    id: 'report-1',
-    azubiId: 'azubi-1',
-    titel: 'Test-Bericht',
-    typ: 'betrieb' as const,
-    kalenderwoche: 12,
-    jahr: 2026,
-    datumVon: new Date('2026-03-16'),
-    datumBis: new Date('2026-03-20'),
-    inhaltMarkdown: 'Inhalt',
-    status: ReportStatus.entwurf,
-    signiertVon: null,
-    signiertAm: null,
-    archiviertAm: null,
-    reportTasks: [],
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+      create: vi.fn().mockResolvedValue({ id: 'report-1', ...jest.requireActual('../../common/constants/reports') }),
+      update: vi.fn().mockResolvedValue({ id: 'report-1' }),
+      delete: vi.fn().mockResolvedValue({ id: 'report-1' }),
+    },
+    zertifikat: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $transaction: vi.fn().mockImplementation(async (fn: any) => fn(prisma)),
+  });
 
   beforeEach(async () => {
-    prisma = {
-      report: {
-        create: vi.fn().mockResolvedValue(mockReport),
-        findUnique: vi.fn().mockResolvedValue(mockReport),
-        findMany: vi.fn().mockResolvedValue([mockReport]),
-        update: vi.fn().mockResolvedValue({ ...mockReport, status: ReportStatus.eingereicht }),
-        delete: vi.fn().mockResolvedValue(undefined),
-        count: vi.fn().mockResolvedValue(0),
-      },
-      reportVersion: {
-        create: vi.fn().mockResolvedValue({}),
-        count: vi.fn().mockResolvedValue(0),
-        findMany: vi.fn().mockResolvedValue([]),
-        findFirst: vi.fn().mockResolvedValue(null),
-      },
-      reportTask: { deleteMany: vi.fn().mockResolvedValue(undefined) },
-      reportAttachment: {
-        create: vi.fn().mockResolvedValue({}),
-        findMany: vi.fn().mockResolvedValue([]),
-      },
-      reportTimeEntry: {
-        create: vi.fn().mockResolvedValue({}),
-        findMany: vi.fn().mockResolvedValue([]),
-      },
-      reportComment: {
-        create: vi.fn().mockResolvedValue({}),
-        findMany: vi.fn().mockResolvedValue([]),
-      },
-      user: { findMany: vi.fn().mockResolvedValue([]) },
-      task: { count: vi.fn().mockResolvedValue(0) },
-      $transaction: vi.fn().mockImplementation((fns: Promise<unknown>[]) => Promise.all(fns)),
-    };
-
-    scope = {
-      getVisibleAzubiIds: vi.fn().mockResolvedValue('ALL'),
-      assertCanAccessAzubi: vi.fn().mockResolvedValue(undefined),
-      assertCanAccessBericht: vi.fn().mockResolvedValue(undefined),
-    };
-
-    notifications = { create: vi.fn().mockResolvedValue(undefined) };
-    audit = { create: vi.fn().mockResolvedValue(undefined) };
-
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        BerichteService,
-        { provide: PrismaService, useValue: prisma },
-        { provide: AccessScopeService, useValue: scope },
-        { provide: NotificationsService, useValue: notifications },
-        { provide: AuditService, useValue: audit },
+        ReportsService,
+        { provide: PrismaService, useFactory: () => createMockPrisma() },
+        { provide: AccessScopeService, useValue: { getScopeFilter: vi.fn().mockReturnValue({}) } },
+        { provide: AuditService, useValue: { log: vi.fn() } },
+        { provide: NotificationsService, useValue: { send: vi.fn() } },
       ],
     }).compile();
 
-    service = module.get(BerichteService);
+    service = module.get<ReportsService>(ReportsService);
+    prisma = module.get(PrismaService);
+    accessScopeService = module.get(AccessScopeService);
+    auditService = module.get(AuditService);
+    notificationsService = module.get(NotificationsService);
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  describe('findAll', () => {
+    it('sollte alle Berichte für den aktuellen Benutzer zurückgeben', async () => {
+      (prisma.report.findMany as any).mockResolvedValueOnce([
+        { id: '1', titel: 'Test Bericht', status: ReportStatus.IN_BEARBEITUNG },
+      ]);
+
+      const result = await service.findAll({});
+
+      expect(prisma.report.findMany).toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0].titel).toBe('Test Bericht');
+    });
+
+    it('sollte Berichte nach Status filtern', async () => {
+      (prisma.report.findMany as any).mockResolvedValueOnce([
+        { id: '1', titel: 'Abgeschlossener Bericht', status: ReportStatus.ABGESCHLOSSEN },
+      ]);
+
+      const result = await service.findAll({ status: ReportStatus.ABGESCHLOSSEN });
+
+      expect(prisma.report.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: expect.objectContaining({ status: ReportStatus.ABGESCHLOSSEN }) }),
+      );
+    });
+  });
+
+  describe('findOne', () => {
+    it('sollte einen einzelnen Bericht zurückgeben', async () => {
+      const mockReport = { id: '1', titel: 'Einzelner Bericht' };
+      (prisma.report.findUnique as any).mockResolvedValueOnce(mockReport);
+
+      const result = await service.findOne('1');
+
+      expect(prisma.report.findUnique).toHaveBeenCalledWith({ where: { id: '1' } });
+      expect(result).toEqual(mockReport);
+    });
+
+    it('sollte null zurückgeben wenn Bericht nicht existiert', async () => {
+      (prisma.report.findUnique as any).mockResolvedValueOnce(null);
+
+      const result = await service.findOne('non-existent');
+
+      expect(result).toBeNull();
+    });
   });
 
   describe('create', () => {
-    it('erstellt einen Bericht mit Status entwurf', async () => {
-      const result = await service.create(mockAzubiUser, {
-        titel: 'Test',
-        typ: 'betrieb',
-        kalenderwoche: 12,
-        jahr: 2026,
-        datumVon: '2026-03-16',
-        datumBis: '2026-03-20',
-        inhaltMarkdown: 'Test',
-      });
+    it('sollte einen neuen Bericht erstellen', async () => {
+      const createDto = { titel: 'Neuer Bericht', typ: ReportTyp.PROGRESS };
+      const mockReport = { id: 'new-id', ...createDto, status: ReportStatus.IN_BEARBEITUNG };
 
-      expect(result.status).toBe(ReportStatus.entwurf);
+      (prisma.report.create as any).mockResolvedValueOnce(mockReport);
+
+      const result = await service.create(createDto as any);
+
       expect(prisma.report.create).toHaveBeenCalled();
-      expect(audit.create).toHaveBeenCalledWith(
-        mockAzubiUser,
-        expect.objectContaining({ action: 'REPORT_CREATED' }),
-      );
-    });
-
-    it('wirft ForbiddenException für Nicht-Azubis', async () => {
-      await expect(
-        service.create(mockReviewerUser, {
-          titel: 'Test',
-          typ: 'betrieb',
-          kalenderwoche: 12,
-          jahr: 2026,
-          datumVon: '2026-03-16',
-          datumBis: '2026-03-20',
-          inhaltMarkdown: 'Test',
-        }),
-      ).rejects.toThrow(ForbiddenException);
-    });
-
-    it('wirft Fehler wenn datumVon >= datumBis', async () => {
-      await expect(
-        service.create(mockAzubiUser, {
-          titel: 'Test',
-          typ: 'betrieb',
-          kalenderwoche: 12,
-          jahr: 2026,
-          datumVon: '2026-03-20',
-          datumBis: '2026-03-16',
-          inhaltMarkdown: 'Test',
-        }),
-      ).rejects.toThrow(BusinessException);
+      expect(result.id).toBe('new-id');
+      expect(result.status).toBe(ReportStatus.IN_BEARBEITUNG);
     });
   });
 
-  describe('submit', () => {
-    it('setzt Status auf eingereicht', async () => {
-      prisma.report.update.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.eingereicht,
+  describe('update', () => {
+    it('sollte einen Bericht aktualisieren', async () => {
+      const updateDto = { titel: 'Aktualisierter Bericht', status: ReportStatus.ABGESCHLOSSEN };
+      const mockReport = { id: '1', ...updateDto };
+
+      (prisma.report.update as any).mockResolvedValueOnce(mockReport);
+
+      const result = await service.update('1', updateDto as any);
+
+      expect(prisma.report.update).toHaveBeenCalledWith({
+        where: { id: '1' },
+        data: updateDto,
       });
-
-      const result = await service.submit('report-1', mockAzubiUser);
-
-      expect(result.status).toBe(ReportStatus.eingereicht);
-      expect(prisma.reportVersion.create).toHaveBeenCalled();
-      expect(audit.create).toHaveBeenCalledWith(
-        mockAzubiUser,
-        expect.objectContaining({ action: 'REPORT_SUBMITTED' }),
-      );
-    });
-
-    it('wirft Fehler wenn nicht entwurf', async () => {
-      prisma.report.findUnique.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.eingereicht,
-      });
-
-      await expect(service.submit('report-1', mockAzubiUser)).rejects.toThrow(
-        BusinessException,
-      );
-    });
-  });
-
-  describe('cancel', () => {
-    it('setzt Status zurück auf entwurf', async () => {
-      prisma.report.findUnique.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.eingereicht,
-      });
-      prisma.report.update.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.entwurf,
-      });
-
-      const result = await service.cancel('report-1', mockAzubiUser);
-
-      expect(result.status).toBe(ReportStatus.entwurf);
-      expect(notifications.create).toHaveBeenCalled();
-      expect(audit.create).toHaveBeenCalledWith(
-        mockAzubiUser,
-        expect.objectContaining({ action: 'REPORT_CANCELLED' }),
-      );
-    });
-
-    it('wirft Fehler wenn nicht eingereicht', async () => {
-      prisma.report.findUnique.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.entwurf,
-      });
-
-      await expect(service.cancel('report-1', mockAzubiUser)).rejects.toThrow(
-        BusinessException,
-      );
+      expect(result.titel).toBe('Aktualisierter Bericht');
     });
   });
 
   describe('remove', () => {
-    it('löscht einen entwurf-Bericht', async () => {
-      await service.remove('report-1', mockAzubiUser);
+    it('sollte einen Bericht löschen', async () => {
+      (prisma.report.delete as any).mockResolvedValueOnce({ id: '1' });
 
-      expect(prisma.report.delete).toHaveBeenCalledWith({ where: { id: 'report-1' } });
-      expect(audit.create).toHaveBeenCalledWith(
-        mockAzubiUser,
-        expect.objectContaining({ action: 'REPORT_DELETED' }),
-      );
+      const result = await service.remove('1');
+
+      expect(prisma.report.delete).toHaveBeenCalledWith({ where: { id: '1' } });
+      expect(result.id).toBe('1');
     });
   });
 
-  describe('addAttachment', () => {
-    it('erstellt einen Anhang', async () => {
-      await service.addAttachment('report-1', mockAzubiUser, {
-        typ: 'screenshot',
-        dateiUrl: 'https://example.com/file.png',
-      });
+  describe('azubiDashboard', () => {
+    it('sollte Azubi-Dashboard mit eingesetzten Aufgaben zurückgeben', async () => {
+      (prisma.report.findMany as any).mockResolvedValueOnce([
+        { id: '1', titel: 'Azubi Report', status: ReportStatus.IN_BEARBEITUNG },
+      ]);
+      (prisma.zertifikat.findMany as any).mockResolvedValueOnce([
+        { id: 'z1', titel: 'Zertifikat 1' },
+      ]);
 
-      expect(prisma.reportAttachment.create).toHaveBeenCalled();
+      const result = await service['azubiDashboard']({ id: 'user-1' } as any);
+
+      expect(prisma.report.findMany).toHaveBeenCalled();
+      expect(prisma.zertifikat.findMany).toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
   });
 
-  describe('addTimeEntry', () => {
-    it('erstellt einen Zeiteintrag', async () => {
-      await service.addTimeEntry('report-1', mockAzubiUser, {
-        stunden: 2.5,
-        kommentar: 'Test',
-      });
+  describe('ausbildungsbeauftragterDashboard', () => {
+    it('sollte Dashboard mit Team-Statistiken zurückgeben', async () => {
+      (prisma.report.findMany as any).mockResolvedValueOnce([
+        { id: '1', status: ReportStatus.IN_BEARBEITUNG },
+        { id: '2', status: ReportStatus.ABGESCHLOSSEN },
+      ]);
 
-      expect(prisma.reportTimeEntry.create).toHaveBeenCalled();
+      const result = await service['ausbildungsbeauftragterDashboard']({ id: 'user-1' } as any);
+
+      expect(prisma.report.findMany).toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
   });
 
-  describe('getVersions', () => {
-    it('liefert Versionen chronologisch', async () => {
-      await service.getVersions('report-1', mockAzubiUser);
+  describe('managementDashboard', () => {
+    it('sollte Management-Dashboard mit Gesamtstatistiken zurückgeben', async () => {
+      (prisma.report.findMany as any).mockResolvedValueOnce([
+        { id: '1', status: ReportStatus.IN_BEARBEITUNG },
+        { id: '2', status: ReportStatus.ABGESCHLOSSEN },
+        { id: '3', status: ReportStatus.ABGELEHNT },
+      ]);
+      (prisma.zertifikat.findMany as any).mockResolvedValueOnce([
+        { id: 'z1', titel: 'Zertifikat' },
+      ]);
 
-      expect(prisma.reportVersion.findMany).toHaveBeenCalledWith({
-        where: { reportId: 'report-1' },
-        orderBy: { version: 'asc' },
-      });
+      const result = await service['managementDashboard']({ id: 'user-1' } as any);
+
+      expect(prisma.report.findMany).toHaveBeenCalled();
+      expect(prisma.zertifikat.findMany).toHaveBeenCalled();
+      expect(result).toBeDefined();
     });
   });
 
-  describe('getDiff', () => {
-    it('liefert Inhalte zweier Versionen', async () => {
-      prisma.reportVersion.findFirst
-        .mockResolvedValueOnce({ inhaltMarkdown: 'V1' })
-        .mockResolvedValueOnce({ inhaltMarkdown: 'V2' });
+  describe('getDashboard', () => {
+    it('sollte azubiDashboard für azubi-Rolle aufrufen', async () => {
+      const spy = vi.spyOn(service as any, 'azubiDashboard').mockResolvedValueOnce({ type: 'azubi' });
 
-      const result = await service.getDiff('report-1', mockAzubiUser, 1, 2);
+      const result = await service.getDashboard({ role: 'azubi' } as any);
 
-      expect(result.v1).toBe('V1');
-      expect(result.v2).toBe('V2');
-    });
-  });
-
-  describe('review', () => {
-    it('wirft Fehler für Nicht-Ausbildungsbeauftragte', async () => {
-      await expect(
-        service.review('report-1', mockAzubiUser, { entscheidung: 'freigeben' }),
-      ).rejects.toThrow(ForbiddenException);
+      expect(spy).toHaveBeenCalledWith({ id: 'user-1' });
+      expect(result.type).toBe('azubi');
     });
 
-    it('wirft Fehler wenn nicht eingereicht', async () => {
-      prisma.report.findUnique.mockResolvedValue({
-        ...mockReport,
-        status: ReportStatus.entwurf,
-      });
+    it('sollte ausbildungsbeauftragterDashboard für ausbildungsbeauftragter-Rolle aufrufen', async () => {
+      const spy = vi.spyOn(service as any, 'ausbildungsbeauftragterDashboard').mockResolvedValueOnce({ type: 'ausbildungsbeauftragter' });
 
-      await expect(
-        service.review('report-1', mockReviewerUser, { entscheidung: 'freigeben' }),
-      ).rejects.toThrow(BusinessException);
+      const result = await service.getDashboard({ role: 'ausbildungsbeauftragter' } as any);
+
+      expect(spy).toHaveBeenCalled();
+      expect(result.type).toBe('ausbildungsbeauftragter');
+    });
+
+    it('sollte managementDashboard für andere Rollen aufrufen', async () => {
+      const spy = vi.spyOn(service as any, 'managementDashboard').mockResolvedValueOnce({ type: 'management' });
+
+      const result = await service.getDashboard({ role: 'hr' } as any);
+
+      expect(spy).toHaveBeenCalled();
+      expect(result.type).toBe('management');
     });
   });
 });

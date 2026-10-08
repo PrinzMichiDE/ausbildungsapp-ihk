@@ -1,28 +1,128 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
-import { IsOptional, IsString, IsNumber, IsUUID, MinLength, Min, Max } from 'class-validator';
+import { IsUUID, IsDate, IsOptional, IsEnum, IsNumber, IsString, Min, Max } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+
+export enum EinsatzStatus {
+  GEPLANT = 'geplant',
+  BESTATIGT = 'bestatigt',
+  ABGESCHLOSSEN = 'abgeschlossen',
+  STORNIERT = 'storniert',
+}
 
 export class CreateEinsatzPlanungDto {
-  @ApiProperty({ example: 'Systemintegration' })
-  @IsString()
-  @MinLength(2)
-  beruf: string;
+  @ApiProperty()
+  @IsUUID()
+  azubiId: string;
 
-  @ApiProperty({ example: 'abteilung-uuid' })
-  @IsUUID('4')
+  @ApiProperty()
+  @IsUUID()
   abteilungId: string;
 
-  @ApiProperty({ example: '2026-01-01' })
+  @ApiProperty()
+  @IsDate()
+  @Type(() => Date)
   von: Date;
 
-  @ApiProperty({ example: '2026-06-30' })
+  @ApiProperty()
+  @IsDate()
+  @Type(() => Date)
   bis: Date;
 
-  @ApiProperty({ required: false, example: 3, minimum: 1, maximum: 5 })
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  beschreibung?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEnum(EinsatzStatus)
+  status?: EinsatzStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  kommentar?: string;
+}
+
+export class UpdateEinsatzPlanungDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  azubiId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  abteilungId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  von?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  bis?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  beschreibung?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEnum(EinsatzStatus)
+  status?: EinsatzStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  kommentar?: string;
+}
+
+export class EinsatzPlanungQueryDto {
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  azubiId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  abteilungId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsEnum(EinsatzStatus)
+  status?: EinsatzStatus;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  vonVon?: Date;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  bisBis?: Date;
+
+  @ApiPropertyOptional({ default: 1 })
   @IsOptional()
   @IsNumber()
   @Min(1)
-  @Max(5)
-  skillLevel?: number;
+  page?: number = 1;
+
+  @ApiPropertyOptional({ default: 20 })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  @Max(100)
+  limit?: number = 20;
 }
 
 export class EinsatzPlanungResponseDto {
@@ -30,17 +130,35 @@ export class EinsatzPlanungResponseDto {
   id: string;
 
   @ApiProperty()
-  beruf: string;
+  azubiId: string;
 
   @ApiProperty()
   abteilungId: string;
 
-  @ApiProperty({ type: Date })
+  @ApiProperty()
   von: Date;
 
-  @ApiProperty({ type: Date })
+  @ApiProperty()
   bis: Date;
 
-  @ApiProperty({ nullable: true })
-  skillLevel: number | null;
+  @ApiPropertyOptional()
+  beschreibung?: string;
+
+  @ApiProperty()
+  status: EinsatzStatus;
+
+  @ApiPropertyOptional()
+  kommentar?: string;
+
+  @ApiProperty()
+  createdAt: Date;
+
+  @ApiProperty()
+  updatedAt: Date;
+}
+
+export class EinsatzUserAssignmentDto {
+  @ApiProperty()
+  @IsUUID()
+  azubiId: string;
 }

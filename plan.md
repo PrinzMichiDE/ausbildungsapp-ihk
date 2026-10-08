@@ -10,7 +10,7 @@ hat konkrete Akzeptanzkriterien, verantwortliche Artefakte und eine Schätzung d
 | Phase | Bezeichnung | Status | Ziel |
 |-------|-------------|--------|------|
 | 0 | Basis (umgesetzt) | ✅ fertig | 21 Module, RBAC, Auth, Prisma, CI-lokal |
-| 1 | Testabdeckung | 🔲 offen | Service-Layer 90 %, Controller 80 %, Guards 100 % |
+| 1 | Testabdeckung | 🔄 in Arbeit | Service-Layer 90 %, Controller 80 %, Guards 100 % |
 | 2 | Containerisierung | 🔲 offen | Dockerfile, prod Docker Compose, Healthchecks |
 | 3 | CI/CD Pipeline | 🔲 offen | GitHub Actions: Lint → Test → Build → Deploy |
 | 4 | E2E & Integration | 🔲 offen | Supertest-Flows, Testcontainer-DB |
