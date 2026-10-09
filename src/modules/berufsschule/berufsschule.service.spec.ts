@@ -5,7 +5,7 @@ import { BerufsschuleService } from './berufsschule.service.js';
 
 describe('BerufsschuleService', () => {
   let service: BerufsschuleService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

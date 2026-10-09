@@ -25,7 +25,7 @@ const mockPrisma = () => ({
 
 describe('AiImportService', () => {
   let service: AiImportService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
   let configService: ConfigService;
 
   const currentUser = {
@@ -35,7 +35,7 @@ describe('AiImportService', () => {
   };
 
   beforeEach(async () => {
-    prisma = mockPrisma() as Record<string, ReturnType<typeof vi.fn>>;
+    prisma = mockPrisma() as Record<string, any>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

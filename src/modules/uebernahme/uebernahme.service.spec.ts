@@ -5,7 +5,7 @@ import { UebernahmegespraechService } from './uebernahme.service.js';
 
 describe('UebernahmegespraechService', () => {
   let service: UebernahmegespraechService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

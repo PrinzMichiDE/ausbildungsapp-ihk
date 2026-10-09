@@ -5,7 +5,7 @@ import { ReporttemplateService } from './report-templates.service.js';
 
 describe('ReporttemplateService', () => {
   let service: ReporttemplateService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

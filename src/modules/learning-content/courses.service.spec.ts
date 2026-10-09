@@ -27,7 +27,7 @@ const mockPrisma = () => ({
 
 describe('CoursesService', () => {
   let service: CoursesService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   const currentUser = {
     id: 'user-1',
@@ -36,7 +36,7 @@ describe('CoursesService', () => {
   };
 
   beforeEach(async () => {
-    prisma = mockPrisma() as Record<string, ReturnType<typeof vi.fn>>;
+    prisma = mockPrisma() as Record<string, any>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

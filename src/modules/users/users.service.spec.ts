@@ -21,9 +21,9 @@ vi.mock('../../common/utils/totp.js', () => ({
 
 describe('UsersService', () => {
   let service: UsersService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
-  let accessScopeService: Record<string, ReturnType<typeof vi.fn>>;
-  let auditService: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
+  let accessScopeService: Record<string, any>;
+  let auditService: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {
@@ -272,7 +272,7 @@ describe('UsersService', () => {
     });
   });
 
-  describe('verifyMFA', () => {
+  describe('verifyMfa', () => {
     it('aktiviert MFA wenn der Code valide ist', async () => {
       const currentUser = {
         id: 'usr-1',
@@ -291,7 +291,7 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       } as any);
 
-      const result = await service.verifyMFA('usr-1', { code: '123456' }, currentUser);
+      const result = await service.verifyMfa('usr-1', { code: '123456' }, currentUser);
 
       expect(result.mfaEnabled).toBe(true);
     });
@@ -306,12 +306,12 @@ describe('UsersService', () => {
       vi.mocked(totpUtils.verifyTOTP).mockResolvedValue(false);
 
       await expect(
-        service.verifyMFA('usr-1', { code: '000000' }, currentUser),
+        service.verifyMfa('usr-1', { code: '000000' }, currentUser),
       ).rejects.toThrow(BadRequestException);
     });
   });
 
-  describe('disableMFA', () => {
+  describe('disableMfa', () => {
     it('deaktiviert MFA für einen Benutzer', async () => {
       const currentUser = {
         id: 'usr-1',
@@ -329,7 +329,7 @@ describe('UsersService', () => {
         updatedAt: new Date(),
       } as any);
 
-      const result = await service.disableMFA('usr-1', currentUser);
+      const result = await service.disableMfa('usr-1', currentUser);
 
       expect(result.mfaEnabled).toBe(false);
     });

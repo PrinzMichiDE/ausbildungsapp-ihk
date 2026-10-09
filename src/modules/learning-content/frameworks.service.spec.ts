@@ -29,10 +29,10 @@ const mockPrisma = () => ({
 
 describe('FrameworksService', () => {
   let service: FrameworksService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
-    prisma = mockPrisma() as Record<string, ReturnType<typeof vi.fn>>;
+    prisma = mockPrisma() as Record<string, any>;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [

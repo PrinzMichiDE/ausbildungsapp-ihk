@@ -5,7 +5,7 @@ import { AlumniService } from './alumni.service.js';
 
 describe('AlumniService', () => {
   let service: AlumniService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

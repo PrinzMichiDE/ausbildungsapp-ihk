@@ -7,8 +7,8 @@ import { Role, AbwesenheitTyp, AbwesenheitQuelle } from '@prisma/client';
 
 describe('AbwesenheitService', () => {
   let service: AbwesenheitService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
-  let scope: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
+  let scope: Record<string, any>;
 
   const adminUser = {
     id: 'usr-1',

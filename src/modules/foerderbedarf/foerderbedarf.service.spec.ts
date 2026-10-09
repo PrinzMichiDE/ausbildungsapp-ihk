@@ -5,7 +5,7 @@ import { FoerderbedarfService } from './foerderbedarf.service.js';
 
 describe('FoerderbedarfService', () => {
   let service: FoerderbedarfService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

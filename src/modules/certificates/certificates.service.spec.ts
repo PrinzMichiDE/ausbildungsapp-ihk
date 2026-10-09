@@ -6,7 +6,7 @@ import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 
 describe('ZertifikateService', () => {
   let service: ZertifikateService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   const mockUser = {
     id: 'usr-1',

@@ -7,7 +7,7 @@ import { Role } from '../../common/constants/roles.js';
 
 describe('AusbildungsvertragService', () => {
   let service: AusbildungsvertragService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   const ausbilderUser = {
     id: 'usr-1',

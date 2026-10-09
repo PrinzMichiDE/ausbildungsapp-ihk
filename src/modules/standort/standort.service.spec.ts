@@ -5,7 +5,7 @@ import { StandortService } from './standort.service.js';
 
 describe('StandortService', () => {
   let service: StandortService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

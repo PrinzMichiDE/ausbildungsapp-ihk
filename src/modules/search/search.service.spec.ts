@@ -5,7 +5,7 @@ import { SearchService } from './search.service.js';
 
 describe('SearchService', () => {
   let service: SearchService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

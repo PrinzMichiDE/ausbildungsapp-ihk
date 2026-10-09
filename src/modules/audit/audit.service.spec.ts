@@ -6,7 +6,7 @@ import { Role } from '../../common/constants/roles.js';
 
 describe('AuditService', () => {
   let service: AuditService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

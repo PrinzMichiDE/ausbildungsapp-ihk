@@ -5,7 +5,7 @@ import { AbteilungenService } from './departments.service.js';
 
 describe('AbteilungenService', () => {
   let service: AbteilungenService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

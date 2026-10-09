@@ -13,7 +13,7 @@ vi.mock('../../common/utils/password.js', () => ({
 
 describe('UsersController', () => {
   let controller: UsersController;
-  let usersService: Record<string, ReturnType<typeof vi.fn>>;
+  let usersService: Record<string, any>;
 
   beforeEach(async () => {
     usersService = {

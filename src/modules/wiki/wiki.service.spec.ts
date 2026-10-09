@@ -6,7 +6,7 @@ import { WikiService } from './wiki.service.js';
 
 describe('WikiService', () => {
   let service: WikiService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

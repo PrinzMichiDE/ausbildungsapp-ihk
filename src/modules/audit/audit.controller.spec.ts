@@ -7,7 +7,7 @@ import { Role } from '../../common/constants/roles.js';
 
 describe('AuditController', () => {
   let controller: AuditController;
-  let auditService: Record<string, ReturnType<typeof vi.fn>>;
+  let auditService: Record<string, any>;
 
   beforeEach(async () => {
     auditService = {

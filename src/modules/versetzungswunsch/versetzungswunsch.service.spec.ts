@@ -5,7 +5,7 @@ import { VersetzungswunschService } from './versetzungswunsch.service.js';
 
 describe('VersetzungswunschService', () => {
   let service: VersetzungswunschService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
 
   beforeEach(async () => {
     prisma = {

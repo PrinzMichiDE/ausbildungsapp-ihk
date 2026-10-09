@@ -7,8 +7,8 @@ import { Role } from '../../common/constants/roles.js';
 
 describe('EinsatzService', () => {
   let service: EinsatzService;
-  let prisma: Record<string, ReturnType<typeof vi.fn>>;
-  let scope: Record<string, ReturnType<typeof vi.fn>>;
+  let prisma: Record<string, any>;
+  let scope: Record<string, any>;
 
   const ausbilderUser = {
     id: 'usr-1',
