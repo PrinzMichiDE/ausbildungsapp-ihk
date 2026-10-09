@@ -11,7 +11,7 @@ import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../../database/prisma.service.js';
 import { Role } from '../constants/roles.js';
 import { ERROR_CODES } from '../constants/error-codes.js';
-const ALLE = 'ALL';
+export const ALLE = 'ALL';
 let AccessScopeService = class AccessScopeService {
     prisma;
     constructor(prisma) {

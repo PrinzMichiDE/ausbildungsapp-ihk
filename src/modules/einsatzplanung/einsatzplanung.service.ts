@@ -1,12 +1,13 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../common/prisma/prisma.service';
-import { AccessScopeService } from '../../common/rbac/access-scope.service';
+import { PrismaService } from '../../database/prisma.service.js';
+import { AccessScopeService, ALLE } from '../../common/rbac/access-scope.service.js';
+import { CurrentUser } from '../../common/decorators/current-user.type.js';
 import {
   CreateEinsatzPlanungDto,
   UpdateEinsatzPlanungDto,
   EinsatzPlanungQueryDto,
   EinsatzUserAssignmentDto,
-} from './dto/einsatzplanung.dto';
+} from './dto/einsatzplanung.dto.js';
 import { Prisma } from '@prisma/client';
 
 /**
@@ -32,7 +33,7 @@ export class EinsatzplanungService {
    * Liest Einsatzplanungseinträge mit Datumspannen-Filter, Status-Filter,
    * Benutzer-Filter und Paginierung.
    */
-  async findAll(dto: EinsatzPlanungQueryDto) {
+  async findAll(dto: EinsatzPlanungQueryDto, currentUser: CurrentUser) {
     const page = dto.page ?? 1;
     const limit = dto.limit ?? 20;
     const skip = (page - 1) * limit;
@@ -40,13 +41,18 @@ export class EinsatzplanungService {
     // 1. Prüfe ob nach einem spezifischen Azubi gefiltert wird
     let azubiFilter: Prisma.EinsatzWhereInput | undefined;
 
-    if (dto.userId) {
+    if (dto.azubiId) {
       const visibleAzubis =
-        await this.accessScope.getVisibleAzubiIds(dto.userId);
-      azubiFilter = { azubiId: { in: visibleAzubis } };
+        await this.accessScope.getVisibleAzubiIds(currentUser);
+      azubiFilter = {
+        azubiId: { in: visibleAzubis === ALLE ? [] : [...visibleAzubis] },
+      };
     } else {
-      // Keine userId — nutze den Scope des aktuellen Users dynamisch über Prisma
-      azubiFilter = this.accessScope.scopedAzubiWhere();
+      const visibleAzubis =
+        await this.accessScope.getVisibleAzubiIds(currentUser);
+      azubiFilter = {
+        azubiId: { in: visibleAzubis === ALLE ? [] : [...visibleAzubis] },
+      };
     }
 
     // 2. Kombiniere mit den anderen Filtern
@@ -325,8 +331,11 @@ export class EinsatzplanungService {
       throw new Error('Für die Kalenderansicht werden von und bis benötigt');
     }
 
+    const visibleAzubiIds = dto.userId
+      ? await this.accessScope.getVisibleAzubiIds(dto.userId)
+      : null;
     const azubiFilter = dto.userId
-      ? { azubiId: { in: await this.accessScope.getVisibleAzubiIds(dto.userId) } }
+      ? { azubiId: { in: visibleAzubiIds === 'ALL' ? [] : visibleAzubiIds } }
       : this.accessScope.scopedAzubiWhere();
 
     const where: Prisma.EinsatzWhereInput = {

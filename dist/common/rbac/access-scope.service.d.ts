@@ -1,6 +1,6 @@
 import { PrismaService } from '../../database/prisma.service.js';
 import { CurrentUser } from '../decorators/current-user.type.js';
-declare const ALLE: "ALL";
+export declare const ALLE: "ALL";
 type Scope = ReadonlyArray<string> | typeof ALLE;
 export declare class AccessScopeService {
     private readonly prisma;

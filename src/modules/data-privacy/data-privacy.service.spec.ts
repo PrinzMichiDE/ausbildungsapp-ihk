@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { DataPrivacyService } from './data-privacy.service';
+import { DataPrivacyService } from './data-privacy.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { AuditService } from '../audit/audit.service.js';

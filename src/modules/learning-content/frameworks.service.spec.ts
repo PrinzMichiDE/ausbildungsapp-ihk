@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { AiService } from '../ai/ai.service';
-import { RagService } from '../ai/rag.service';
+import { PrismaService } from '../../database/prisma.service.js';
+import { AiService } from '../ai/ai.service.js';
+import { RagService } from '../ai/rag.service.js';
 import { ConfigService } from '@nestjs/config';
 import { FrameworksService } from './frameworks.service';
 import { CreateFrameworkDto, UpdateFrameworkDto } from './dto/learning-content.dto';

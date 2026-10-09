@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { EinsatzplanungService } from './einsatzplanung.service';
-import { PrismaService } from '../../common/prisma/prisma.service';
+import { EinsatzplanungService } from './einsatzplanung.service.js';
+import { PrismaService } from '../../common/prisma/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 
 describe('EinsatzplanungService', () => {

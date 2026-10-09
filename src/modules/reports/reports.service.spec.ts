@@ -1,10 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ReportsService } from './reports.service';
+import { ReportsService } from './reports.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { AuditService } from '../audit/audit.service.js';
-import { NotificationsService } from '../../users/notifications.service';
-import { ReportStatus, ReportTyp } from '../../common/constants/reports';
+import { NotificationsService } from '../../users/notifications.service.js';
+import { ReportStatus, ReportTyp } from '../../common/constants/reports.js';
 
 vi.mock('../../common/utils/build-simple-pdf', () => ({
   buildSimplePdf: vi.fn().mockResolvedValue({ pdfBuffer: Buffer.from('mock') }),

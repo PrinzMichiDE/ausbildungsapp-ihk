@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ExamsService } from './exams.service';
+import { ExamsService } from './exams.service.js';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { PruefungsStatus } from '@prisma/client';

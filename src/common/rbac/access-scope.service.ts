@@ -4,7 +4,7 @@ import { CurrentUser } from '../decorators/current-user.type.js';
 import { Role } from '../constants/roles.js';
 import { ERROR_CODES } from '../constants/error-codes.js';
 
-const ALLE = 'ALL' as const;
+export const ALLE = 'ALL' as const;
 type Scope = ReadonlyArray<string> | typeof ALLE;
 
 @Injectable()

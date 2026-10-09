@@ -2,10 +2,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from 'nestjs-prisma';
 import { ForbiddenException } from '@nestjs/common';
 
-import { FeedbackGespraechService } from './feedback-gespraech.service';
-import { AccessScopeService } from 'src/common/rbac/access-scope.service';
-import { Status } from './entities/feedback-gespraech.entity';
-import { NutzerArt } from '@modules/users/entities/nutzer.entity';
+import { FeedbackGespraechService } from './feedback-gespraech.service.js';
+import { AccessScopeService } from 'src/common/rbac/access-scope.service.js';
+import { Status } from './entities/feedback-gespraech.entity.js';
+import { NutzerArt } from '@modules/users/entities/nutzer.entity.js';
 
 describe('FeedbackGespraechService', () => {
   let service: FeedbackGespraechService;

@@ -11,17 +11,17 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Roles } from '../../common/decorators/roles.decorator';
-import { CurrentUser } from '../../common/decorators/current-user.decorator';
-import { EinsatzplanungService } from './einsatzplanung.service';
+import { Roles } from '../../common/decorators/roles.decorator.js';
+import { CurrentUser } from '../../common/decorators/current-user.decorator.js';
+import { EinsatzplanungService } from './einsatzplanung.service.js';
 import {
   CreateEinsatzPlanungDto,
   UpdateEinsatzPlanungDto,
   EinsatzPlanungQueryDto,
   EinsatzPlanungResponseDto,
   EinsatzUserAssignmentDto,
-} from './dto/einsatzplanung.dto';
-import { Public } from '../../common/decorators/public.decorator';
+} from './dto/einsatzplanung.dto.js';
+import { Public } from '../../common/decorators/public.decorator.js';
 
 /**
  * Einsatzplanung Controller — CRUD REST-API für den Einsatzplanungs-Modul.
@@ -47,8 +47,8 @@ export class EinsatzplanungController {
     description: 'Paginierte Liste der Einsatzplanungseinträge',
     type: [EinsatzPlanungResponseDto],
   })
-  async findAll(@Query() query: EinsatzPlanungQueryDto) {
-    return this.einsatzplanungService.findAll(query);
+  async findAll(@Query() query: EinsatzPlanungQueryDto, @CurrentUser() currentUser: CurrentUser) {
+    return this.einsatzplanungService.findAll(query, currentUser);
   }
 
   // ------------------------------------------------------------------

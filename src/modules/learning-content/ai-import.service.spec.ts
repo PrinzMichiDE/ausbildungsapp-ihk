@@ -1,13 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BadRequestException, InternalServerErrorException } from '@nestjs/common';
-import { PrismaService } from '../../database/prisma.service';
-import { AiService } from '../ai/ai.service';
-import { RagService } from '../ai/rag.service';
+import { PrismaService } from '../../database/prisma.service.js';
+import { AiService } from '../ai/ai.service.js';
+import { RagService } from '../ai/rag.service.js';
 import { ConfigService } from '@nestjs/config';
-import { AiImportService } from '../ai-import.service';
-import { ErrorCodes } from '../../common/constants/error-codes';
-import { Roles } from '../../common/constants/roles';
-import { BusinessException } from '../../common/exceptions/business.exception';
+import { AiImportService } from '../ai-import.service.js';
+import { ErrorCodes } from '../../common/constants/error-codes.js';
+import { Roles } from '../../common/constants/roles.js';
+import { BusinessException } from '../../common/exceptions/business.exception.js';
 
 const mockPrisma = () => ({
   document: {

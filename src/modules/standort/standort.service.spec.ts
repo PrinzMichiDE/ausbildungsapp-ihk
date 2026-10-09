@@ -9,7 +9,7 @@ describe('StandortService', () => {
 
   beforeEach(async () => {
     prisma = {
-      Standort: {
+      standort: {
         findMany: vi.fn().mockResolvedValue([]),
         findUnique: vi.fn().mockResolvedValue(null),
         create: vi.fn().mockResolvedValue({}),
