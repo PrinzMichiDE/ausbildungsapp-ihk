@@ -103,13 +103,13 @@ export class EinsatzPlanungQueryDto {
   @IsOptional()
   @IsDate()
   @Type(() => Date)
-  vonVon?: Date;
+  von?: Date;
 
   @ApiPropertyOptional()
   @IsOptional()
   @IsDate()
   @Type(() => Date)
-  bisBis?: Date;
+  bis?: Date;
 
   @ApiPropertyOptional({ default: 1 })
   @IsOptional()

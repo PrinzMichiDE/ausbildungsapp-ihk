@@ -63,8 +63,8 @@ export class EinsatzplanungController {
     description: 'Einsatzplanungseintrag',
     type: EinsatzPlanungResponseDto,
   })
-  async findById(@Param('id') id: string, @CurrentUser() user: any) {
-    return this.einsatzplanungService.findById(id, user.id);
+  async findById(@Param('id') id: string, @CurrentUser() user: CurrentUser) {
+    return this.einsatzplanungService.findById(id, user);
   }
 
   // ------------------------------------------------------------------
@@ -131,8 +131,11 @@ export class EinsatzplanungController {
     description: 'Kalenderansicht der Einsätze',
     type: [EinsatzPlanungResponseDto],
   })
-  async getCalendarView(@Query() query: EinsatzPlanungQueryDto) {
-    return this.einsatzplanungService.getCalendarView(query);
+  async getCalendarView(
+    @Query() query: EinsatzPlanungQueryDto,
+    @CurrentUser() currentUser: CurrentUser,
+  ) {
+    return this.einsatzplanungService.getCalendarView(query, currentUser);
   }
 
   // ------------------------------------------------------------------

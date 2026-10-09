@@ -118,7 +118,7 @@ export class EinsatzplanungService {
    * Liest einen einzelnen Einsatzplanungseintrag nach ID.
    * RBAC-Prüfung: Azubi darf nur sich selbst sehen, andere Rollen via Scope.
    */
-  async findById(id: string, userId?: string) {
+  async findById(id: string, currentUser: CurrentUser) {
     const einsatz = await this.prisma.einsatz.findUnique({
       where: { id },
       include: {
@@ -147,14 +147,11 @@ export class EinsatzplanungService {
     }
 
     // RBAC-Prüfung: Ist der Azubi berechtigt, diesen Einsatz zu sehen?
-    if (userId) {
-      const visibleAzubiIds =
-        await this.accessScope.getVisibleAzubiIds(userId);
-      if (!visibleAzubiIds.includes(einsatz.azubiId)) {
-        throw new NotFoundException(
-          `Einsatzplanung mit ID ${id} nicht gefunden`,
-        );
-      }
+    const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
+    if (visibleAzubiIds !== ALLE && !visibleAzubiIds.includes(einsatz.azubiId)) {
+      throw new NotFoundException(
+        `Einsatzplanung mit ID ${id} nicht gefunden`,
+      );
     }
 
     return einsatz;
@@ -167,7 +164,7 @@ export class EinsatzplanungService {
   /**
    * Erstellt einen neuen Einsatzplanungseintrag.
    */
-  async create(dto: CreateEinsatzPlanungDto, userId: string) {
+  async create(dto: CreateEinsatzPlanungDto, currentUser: CurrentUser) {
     // Validiere die DTOTWerte — von muss vor bis liegen
     if (dto.von >= dto.bis) {
       throw new Error('Das Startdatum (von) muss vor dem Enddatum (bis) liegen');
@@ -175,7 +172,7 @@ export class EinsatzplanungService {
 
     // Prüfe ob der zugewiesene Azubi sichtbar ist (RBAC)
     const visibleAzubiIds =
-      await this.accessScope.getVisibleAzubiIds(userId);
+      await this.accessScope.getVisibleAzubiIds(currentUser);
 
     if (dto.azubiId && !visibleAzubiIds.includes(dto.azubiId)) {
       throw new Error('Der zugewiesene Azubi ist für diesen Benutzer nicht sichtbar');
@@ -188,7 +185,7 @@ export class EinsatzplanungService {
         von: new Date(dto.von),
         bis: new Date(dto.bis),
         status: dto.status ?? 'geplant',
-        bemerkung: dto.bemerkung,
+        bemerkung: dto.kommentar,
       },
       include: {
         azubi: {
@@ -221,7 +218,7 @@ export class EinsatzplanungService {
    * Aktualisiert einen vorhandenen Einsatzplanungseintrag.
    * Nur übergebene Felder werden aktualisiert (Partial).
    */
-  async update(id: string, dto: UpdateEinsatzPlanungDto, userId: string) {
+  async update(id: string, dto: UpdateEinsatzPlanungDto, currentUser: CurrentUser) {
     // Prüfe ob der Eintrag existiert
     const existing = await this.prisma.einsatz.findUnique({ where: { id } });
 
@@ -233,7 +230,7 @@ export class EinsatzplanungService {
 
     // RBAC-Prüfung: Darf der User diesen Eintrag ändern?
     const visibleAzubiIds =
-      await this.accessScope.getVisibleAzubiIds(userId);
+      await this.accessScope.getVisibleAzubiIds(currentUser);
     if (!visibleAzubiIds.includes(existing.azubiId)) {
       throw new NotFoundException(
         `Einsatzplanung mit ID ${id} nicht gefunden`,
@@ -261,7 +258,7 @@ export class EinsatzplanungService {
         ...(dto.von && { von: new Date(dto.von) }),
         ...(dto.bis && { bis: new Date(dto.bis) }),
         ...(dto.status && { status: dto.status }),
-        ...(dto.bemerkung !== undefined && { bemerkung: dto.bemerkung }),
+        ...(dto.kommentar !== undefined && { bemerkung: dto.kommentar }),
       },
       include: {
         azubi: {
@@ -294,7 +291,7 @@ export class EinsatzplanungService {
    * Löscht einen Einsatzplanungseintrag.
    * Existiert er nicht, wird NotFoundException geworfen.
    */
-  async remove(id: string, userId: string) {
+  async remove(id: string, currentUser: CurrentUser) {
     const existing = await this.prisma.einsatz.findUnique({ where: { id } });
 
     if (!existing) {
@@ -304,8 +301,9 @@ export class EinsatzplanungService {
     }
 
     // RBAC-Prüfung
-    const visibleAzubiIds =
-      await this.accessScope.getVisibleAzubiIds(userId);
+    const visibleAzubiIds = [
+      ...await this.accessScope.getVisibleAzubiIds(currentUser),
+    ];
     if (!visibleAzubiIds.includes(existing.azubiId)) {
       throw new NotFoundException(
         `Einsatzplanung mit ID ${id} nicht gefunden`,
@@ -326,17 +324,20 @@ export class EinsatzplanungService {
    * Liest alle Einsätze für eine Kalenderansicht in einem Datumsbereich.
    * Optimiert für Frontend-Kalenderkomponenten.
    */
-  async getCalendarView(dto: EinsatzPlanungQueryDto) {
+  async getCalendarView(
+    dto: EinsatzPlanungQueryDto,
+    currentUser: CurrentUser,
+  ) {
     if (!dto.von || !dto.bis) {
       throw new Error('Für die Kalenderansicht werden von und bis benötigt');
     }
 
-    const visibleAzubiIds = dto.userId
-      ? await this.accessScope.getVisibleAzubiIds(dto.userId)
-      : null;
-    const azubiFilter = dto.userId
-      ? { azubiId: { in: visibleAzubiIds === 'ALL' ? [] : visibleAzubiIds } }
-      : this.accessScope.scopedAzubiWhere();
+    const visibleAzubiIds = [
+      ...await this.accessScope.getVisibleAzubiIds(currentUser),
+    ];
+    const azubiFilter = dto.azubiId
+      ? { azubiId: dto.azubiId }
+      : {};
 
     const where: Prisma.EinsatzWhereInput = {
       ...azubiFilter,
@@ -390,7 +391,7 @@ export class EinsatzplanungService {
   async assignUser(
     id: string,
     dto: EinsatzUserAssignmentDto,
-    userId: string,
+    currentUser: CurrentUser,
   ) {
     const existing = await this.prisma.einsatz.findUnique({ where: { id } });
 
@@ -402,7 +403,7 @@ export class EinsatzplanungService {
 
     // RBAC-Prüfung
     const visibleAzubiIds =
-      await this.accessScope.getVisibleAzubiIds(userId);
+      await this.accessScope.getVisibleAzubiIds(currentUser);
     if (!visibleAzubiIds.includes(existing.azubiId)) {
       throw new NotFoundException(
         `Einsatzplanung mit ID ${id} nicht gefunden`,
@@ -443,9 +444,10 @@ export class EinsatzplanungService {
   /**
    * Holt alle zugewiesenen Azubis für einen bestimmten Einsatz (mehrfachzuweisung).
    */
-  async getUserAssignments(einsatzId: string, userId: string) {
+  async getUserAssignments(einsatzId: string, currentUser: CurrentUser) {
     const existing = await this.prisma.einsatz.findUnique({
       where: { id: einsatzId },
+      include: { azubi: true },
     });
 
     if (!existing) {
@@ -456,8 +458,8 @@ export class EinsatzplanungService {
 
     // RBAC-Prüfung
     const visibleAzubiIds =
-      await this.accessScope.getVisibleAzubiIds(userId);
-    if (!visibleAzubiIds.includes(existing.azubiId)) {
+      await this.accessScope.getVisibleAzubiIds(currentUser);
+    if (![...visibleAzubiIds].includes(existing.azubiId)) {
       throw new NotFoundException(
         `Einsatzplanung mit ID ${einsatzId} nicht gefunden`,
       );
@@ -470,7 +472,6 @@ export class EinsatzplanungService {
         abteilungId: existing.abteilungId,
         von: existing.von,
         bis: existing.bis,
-        status: existing.status,
       },
     };
   }

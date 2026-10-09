@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { EinsatzplanungService } from './einsatzplanung.service.js';
-import { PrismaService } from '../../common/prisma/prisma.service.js';
+import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 
 describe('EinsatzplanungService', () => {
   let service: EinsatzplanungService;
   let prisma: any;
   let accessScopeService: any;
+  let currentUser: any;
 
   const createMockPrisma = () => ({
     einsatz: {
@@ -33,13 +34,14 @@ describe('EinsatzplanungService', () => {
       providers: [
         EinsatzplanungService,
         { provide: PrismaService, useFactory: () => createMockPrisma() },
-        { provide: AccessScopeService, useValue: { getScopeFilter: vi.fn().mockReturnValue({}) } },
+        { provide: AccessScopeService, useValue: { getScopeFilter: vi.fn().mockReturnValue({}), getVisibleAzubiIds: vi.fn().mockResolvedValue([]) } },
       ],
     }).compile();
 
     service = module.get<EinsatzplanungService>(EinsatzplanungService);
     prisma = module.get(PrismaService);
     accessScopeService = module.get(AccessScopeService);
+    currentUser = { id: 'user-1' };
   });
 
   afterEach(() => {
@@ -54,7 +56,7 @@ describe('EinsatzplanungService', () => {
       ];
       (prisma.einsatz.findMany as any).mockResolvedValueOnce(mockEinsaetze);
 
-      const result = await service.findAll({});
+      const result = await service.findAll({}, currentUser);
 
       expect(prisma.einsatz.findMany).toHaveBeenCalled();
       expect(result).toHaveLength(2);
@@ -66,7 +68,7 @@ describe('EinsatzplanungService', () => {
       (prisma.einsatz.findMany as any).mockResolvedValueOnce(mockEinsaetze);
       (prisma.einsatz.count as any).mockResolvedValueOnce(1);
 
-      await service.findAll({ page: 1, limit: 10 });
+      await service.findAll({ page: 1, limit: 10 }, currentUser);
 
       expect(prisma.einsatz.findMany).toHaveBeenCalled();
       expect(prisma.einsatz.count).toHaveBeenCalled();
