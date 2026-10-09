@@ -34,7 +34,7 @@ export declare class EinsatzplanungController {
             totalPages: number;
         };
     }>;
-    findById(id: string, user: any): Promise<{
+    findById(id: string, user: CurrentUser): Promise<{
         abteilung: {
             id: string;
             kurzzeichen: string | null;
@@ -103,7 +103,7 @@ export declare class EinsatzplanungController {
     remove(id: string, user: any): Promise<{
         deleted: string;
     }>;
-    getCalendarView(query: EinsatzPlanungQueryDto): Promise<{
+    getCalendarView(query: EinsatzPlanungQueryDto, currentUser: CurrentUser): Promise<{
         data: ({
             abteilung: {
                 id: string;

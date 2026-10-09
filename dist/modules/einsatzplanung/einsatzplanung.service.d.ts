@@ -37,7 +37,7 @@ export declare class EinsatzplanungService {
             totalPages: number;
         };
     }>;
-    findById(id: string, userId?: string): Promise<{
+    findById(id: string, currentUser: CurrentUser): Promise<{
         abteilung: {
             id: string;
             kurzzeichen: string | null;
@@ -59,7 +59,7 @@ export declare class EinsatzplanungService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    create(dto: CreateEinsatzPlanungDto, userId: string): Promise<{
+    create(dto: CreateEinsatzPlanungDto, currentUser: CurrentUser): Promise<{
         abteilung: {
             id: string;
             kurzzeichen: string | null;
@@ -81,7 +81,7 @@ export declare class EinsatzplanungService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    update(id: string, dto: UpdateEinsatzPlanungDto, userId: string): Promise<{
+    update(id: string, dto: UpdateEinsatzPlanungDto, currentUser: CurrentUser): Promise<{
         abteilung: {
             id: string;
             kurzzeichen: string | null;
@@ -103,10 +103,10 @@ export declare class EinsatzplanungService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    remove(id: string, userId: string): Promise<{
+    remove(id: string, currentUser: CurrentUser): Promise<{
         deleted: string;
     }>;
-    getCalendarView(dto: EinsatzPlanungQueryDto): Promise<{
+    getCalendarView(dto: EinsatzPlanungQueryDto, currentUser: CurrentUser): Promise<{
         data: ({
             abteilung: {
                 id: string;
@@ -129,7 +129,7 @@ export declare class EinsatzplanungService {
             updatedAt: Date;
         })[];
     }>;
-    assignUser(id: string, dto: EinsatzUserAssignmentDto, userId: string): Promise<{
+    assignUser(id: string, dto: EinsatzUserAssignmentDto, currentUser: CurrentUser): Promise<{
         abteilung: {
             id: string;
             kurzzeichen: string | null;
@@ -151,14 +151,25 @@ export declare class EinsatzplanungService {
         createdAt: Date;
         updatedAt: Date;
     }>;
-    getUserAssignments(einsatzId: string, userId: string): Promise<{
+    getUserAssignments(einsatzId: string, currentUser: CurrentUser): Promise<{
         data: {
             azubiId: string;
-            azubi: any;
+            azubi: {
+                id: string;
+                azubiId: string | null;
+                createdAt: Date;
+                updatedAt: Date;
+                email: string;
+                firstName: string;
+                lastName: string;
+                isActive: boolean;
+                mfaActive: boolean;
+                passwordHash: string;
+                mfaSecret: string | null;
+            };
             abteilungId: string;
             von: Date;
             bis: Date;
-            status: any;
         };
     }>;
 }

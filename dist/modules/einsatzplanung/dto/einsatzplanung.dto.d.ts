@@ -26,8 +26,8 @@ export declare class EinsatzPlanungQueryDto {
     azubiId?: string;
     abteilungId?: string;
     status?: EinsatzStatus;
-    vonVon?: Date;
-    bisBis?: Date;
+    von?: Date;
+    bis?: Date;
     page?: number;
     limit?: number;
 }

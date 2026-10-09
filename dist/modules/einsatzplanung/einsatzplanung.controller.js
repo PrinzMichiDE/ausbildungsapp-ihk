@@ -25,7 +25,7 @@ let EinsatzplanungController = class EinsatzplanungController {
         return this.einsatzplanungService.findAll(query, currentUser);
     }
     async findById(id, user) {
-        return this.einsatzplanungService.findById(id, user.id);
+        return this.einsatzplanungService.findById(id, user);
     }
     async create(dto, user) {
         return this.einsatzplanungService.create(dto, user.id);
@@ -36,8 +36,8 @@ let EinsatzplanungController = class EinsatzplanungController {
     async remove(id, user) {
         return this.einsatzplanungService.remove(id, user.id);
     }
-    async getCalendarView(query) {
-        return this.einsatzplanungService.getCalendarView(query);
+    async getCalendarView(query, currentUser) {
+        return this.einsatzplanungService.getCalendarView(query, currentUser);
     }
     async assignUser(id, dto, user) {
         return this.einsatzplanungService.assignUser(id, dto, user.id);
@@ -129,8 +129,9 @@ __decorate([
         type: [EinsatzPlanungResponseDto],
     }),
     __param(0, Query()),
+    __param(1, CurrentUser()),
     __metadata("design:type", Function),
-    __metadata("design:paramtypes", [EinsatzPlanungQueryDto]),
+    __metadata("design:paramtypes", [EinsatzPlanungQueryDto, Object]),
     __metadata("design:returntype", Promise)
 ], EinsatzplanungController.prototype, "getCalendarView", null);
 __decorate([

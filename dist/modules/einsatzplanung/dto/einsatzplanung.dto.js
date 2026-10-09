@@ -123,8 +123,8 @@ export class EinsatzPlanungQueryDto {
     azubiId;
     abteilungId;
     status;
-    vonVon;
-    bisBis;
+    von;
+    bis;
     page = 1;
     limit = 20;
 }
@@ -152,14 +152,14 @@ __decorate([
     IsDate(),
     Type(() => Date),
     __metadata("design:type", Date)
-], EinsatzPlanungQueryDto.prototype, "vonVon", void 0);
+], EinsatzPlanungQueryDto.prototype, "von", void 0);
 __decorate([
     ApiPropertyOptional(),
     IsOptional(),
     IsDate(),
     Type(() => Date),
     __metadata("design:type", Date)
-], EinsatzPlanungQueryDto.prototype, "bisBis", void 0);
+], EinsatzPlanungQueryDto.prototype, "bis", void 0);
 __decorate([
     ApiPropertyOptional({ default: 1 }),
     IsOptional(),

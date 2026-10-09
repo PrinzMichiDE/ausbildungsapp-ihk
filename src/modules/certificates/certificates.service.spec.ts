@@ -11,7 +11,7 @@ describe('ZertifikateService', () => {
   const mockUser = {
     id: 'usr-1',
     email: 'test@example.com',
-    roles: [{ role: { name: 'admin' } }],
+    roles: [Role.admin],
     azubiId: null,
     abteilungIds: [],
   };

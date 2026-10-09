@@ -84,7 +84,7 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
             },
         };
     }
-    async findById(id, userId) {
+    async findById(id, currentUser) {
         const einsatz = await this.prisma.einsatz.findUnique({
             where: { id },
             include: {
@@ -108,19 +108,17 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         if (!einsatz) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
-        if (userId) {
-            const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
-            if (!visibleAzubiIds.includes(einsatz.azubiId)) {
-                throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
-            }
+        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
+        if (visibleAzubiIds !== ALLE && !visibleAzubiIds.includes(einsatz.azubiId)) {
+            throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
         return einsatz;
     }
-    async create(dto, userId) {
+    async create(dto, currentUser) {
         if (dto.von >= dto.bis) {
             throw new Error('Das Startdatum (von) muss vor dem Enddatum (bis) liegen');
         }
-        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
+        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
         if (dto.azubiId && !visibleAzubiIds.includes(dto.azubiId)) {
             throw new Error('Der zugewiesene Azubi ist für diesen Benutzer nicht sichtbar');
         }
@@ -131,7 +129,7 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
                 von: new Date(dto.von),
                 bis: new Date(dto.bis),
                 status: dto.status ?? 'geplant',
-                bemerkung: dto.bemerkung,
+                bemerkung: dto.kommentar,
             },
             include: {
                 azubi: {
@@ -154,12 +152,12 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         this.logger.log(`Neuer Einsatz erstellt: ${einsatz.id}`);
         return einsatz;
     }
-    async update(id, dto, userId) {
+    async update(id, dto, currentUser) {
         const existing = await this.prisma.einsatz.findUnique({ where: { id } });
         if (!existing) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
-        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
+        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
         if (!visibleAzubiIds.includes(existing.azubiId)) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
@@ -180,7 +178,7 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
                 ...(dto.von && { von: new Date(dto.von) }),
                 ...(dto.bis && { bis: new Date(dto.bis) }),
                 ...(dto.status && { status: dto.status }),
-                ...(dto.bemerkung !== undefined && { bemerkung: dto.bemerkung }),
+                ...(dto.kommentar !== undefined && { bemerkung: dto.kommentar }),
             },
             include: {
                 azubi: {
@@ -203,12 +201,14 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         this.logger.log(`Einsatzplanung aktualisiert: ${einsatz.id}`);
         return einsatz;
     }
-    async remove(id, userId) {
+    async remove(id, currentUser) {
         const existing = await this.prisma.einsatz.findUnique({ where: { id } });
         if (!existing) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
-        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
+        const visibleAzubiIds = [
+            ...await this.accessScope.getVisibleAzubiIds(currentUser),
+        ];
         if (!visibleAzubiIds.includes(existing.azubiId)) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
@@ -216,16 +216,16 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         this.logger.log(`Einsatzplanung gelöscht: ${id}`);
         return { deleted: id };
     }
-    async getCalendarView(dto) {
+    async getCalendarView(dto, currentUser) {
         if (!dto.von || !dto.bis) {
             throw new Error('Für die Kalenderansicht werden von und bis benötigt');
         }
-        const visibleAzubiIds = dto.userId
-            ? await this.accessScope.getVisibleAzubiIds(dto.userId)
-            : null;
-        const azubiFilter = dto.userId
-            ? { azubiId: { in: visibleAzubiIds === 'ALL' ? [] : visibleAzubiIds } }
-            : this.accessScope.scopedAzubiWhere();
+        const visibleAzubiIds = [
+            ...await this.accessScope.getVisibleAzubiIds(currentUser),
+        ];
+        const azubiFilter = dto.azubiId
+            ? { azubiId: dto.azubiId }
+            : {};
         const where = {
             ...azubiFilter,
             ...(dto.status && { status: dto.status }),
@@ -264,12 +264,12 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         });
         return { data: einsaetze };
     }
-    async assignUser(id, dto, userId) {
+    async assignUser(id, dto, currentUser) {
         const existing = await this.prisma.einsatz.findUnique({ where: { id } });
         if (!existing) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
-        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
+        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
         if (!visibleAzubiIds.includes(existing.azubiId)) {
             throw new NotFoundException(`Einsatzplanung mit ID ${id} nicht gefunden`);
         }
@@ -300,15 +300,16 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
         this.logger.log(`User zugewiesen zu Einsatz ${id}: ${dto.azubiId}`);
         return einsatz;
     }
-    async getUserAssignments(einsatzId, userId) {
+    async getUserAssignments(einsatzId, currentUser) {
         const existing = await this.prisma.einsatz.findUnique({
             where: { id: einsatzId },
+            include: { azubi: true },
         });
         if (!existing) {
             throw new NotFoundException(`Einsatzplanung mit ID ${einsatzId} nicht gefunden`);
         }
-        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(userId);
-        if (!visibleAzubiIds.includes(existing.azubiId)) {
+        const visibleAzubiIds = await this.accessScope.getVisibleAzubiIds(currentUser);
+        if (![...visibleAzubiIds].includes(existing.azubiId)) {
             throw new NotFoundException(`Einsatzplanung mit ID ${einsatzId} nicht gefunden`);
         }
         return {
@@ -318,7 +319,6 @@ let EinsatzplanungService = EinsatzplanungService_1 = class EinsatzplanungServic
                 abteilungId: existing.abteilungId,
                 von: existing.von,
                 bis: existing.bis,
-                status: existing.status,
             },
         };
     }
