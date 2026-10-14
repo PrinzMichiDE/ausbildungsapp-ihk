@@ -26,6 +26,11 @@ export interface AppConfig {
     webhookUrl: string;
   };
   bcryptRounds: number;
+  reports: {
+    maxMinutesPerDay: number;
+    maxMinutesPerDayMinor: number;
+    maxMinutesPerWeekMinor: number;
+  };
 }
 
 export default (): AppConfig => ({
@@ -59,4 +64,9 @@ export default (): AppConfig => ({
     webhookUrl: process.env.TEAMS_WEBHOOK_URL ?? '',
   },
   bcryptRounds: Number(process.env.BCRYPT_ROUNDS ?? 12),
+  reports: {
+    maxMinutesPerDay: Number(process.env.REPORT_MAX_MINUTES_PER_DAY ?? 600),
+    maxMinutesPerDayMinor: Number(process.env.REPORT_MAX_MINUTES_PER_DAY_MINOR ?? 480),
+    maxMinutesPerWeekMinor: Number(process.env.REPORT_MAX_MINUTES_PER_WEEK_MINOR ?? 2400),
+  },
 });
