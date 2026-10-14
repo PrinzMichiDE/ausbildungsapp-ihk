@@ -2,6 +2,27 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import api from '@/api/client'
 
+export type ReportStatus = 'entwurf' | 'eingereicht' | 'in_pruefung' | 'visiert' | 'archiviert'
+
+export type ReportDayArt = 'betrieb' | 'berufsschule' | 'schulung' | 'urlaub' | 'krank' | 'feiertag'
+
+export interface ReportActivity {
+  id?: string
+  beschreibung: string
+  dauerMinuten: number
+  taskId: string | null
+  taskTitel?: string | null
+}
+
+export interface ReportDay {
+  id?: string
+  datum: string
+  art: ReportDayArt
+  summeMinuten: number
+  maxMinuten: number
+  aktivitaeten: ReportActivity[]
+}
+
 export interface Report {
   id: string
   azubiId: string
@@ -12,11 +33,14 @@ export interface Report {
   datumVon: string
   datumBis: string
   inhaltMarkdown: string
-  status: 'entwurf' | 'eingereicht' | 'vorpruefung' | 'freigegeben' | 'archiviert' | 'zurueckgewiesen'
-  signiertVon?: string
-  signiertAm?: string
-  archiviertAm?: string
+  status: ReportStatus
+  signiertVon?: string | null
+  signiertAm?: string | null
+  archiviertAm?: string | null
   taskIds: string[]
+  summeMinuten: number
+  maxMinutenWoche: number | null
+  tage?: ReportDay[]
   createdAt: string
 }
 
@@ -24,14 +48,18 @@ export interface ReportComment {
   id: string
   text: string
   art: string
-  erstellerVorname: string
-  erstellerNachname: string
   createdAt: string
 }
 
 export interface ReportsResponse {
   data: Report[]
   meta: { total: number; page: number; limit: number; totalPages: number }
+}
+
+export interface SaveDayPayload {
+  datum: string
+  art: ReportDayArt
+  aktivitaeten: Array<{ beschreibung: string; dauerMinuten: number; taskId?: string }>
 }
 
 export const useReportStore = defineStore('report', () => {
@@ -43,6 +71,17 @@ export const useReportStore = defineStore('report', () => {
   const total = ref(0)
   const page = ref(1)
   const limit = ref(20)
+
+  function replaceInList(report: Report) {
+    const idx = reports.value.findIndex((r) => r.id === report.id)
+    if (idx !== -1) reports.value[idx] = report
+  }
+
+  function setCurrent(report: Report) {
+    currentReport.value = report
+    replaceInList(report)
+    return report
+  }
 
   async function fetchReports(params?: { status?: string; jahr?: number; azubiId?: string }) {
     loading.value = true
@@ -71,15 +110,7 @@ export const useReportStore = defineStore('report', () => {
     }
   }
 
-  async function createReport(data: {
-    titel: string
-    typ: string
-    kalenderwoche: number
-    jahr: number
-    datumVon: string
-    datumBis: string
-    inhaltMarkdown: string
-  }) {
+  async function createReport(data: { titel: string; kalenderwoche: number; jahr: number }) {
     saving.value = true
     try {
       const res = await api.post<{ data: Report }>('/berichte', data)
@@ -90,14 +121,21 @@ export const useReportStore = defineStore('report', () => {
     }
   }
 
-  async function updateReport(id: string, data: { inhaltMarkdown?: string; titel?: string }) {
+  async function updateReport(id: string, data: { titel?: string }) {
     saving.value = true
     try {
       const res = await api.patch<{ data: Report }>(`/berichte/${id}`, data)
-      currentReport.value = res.data.data
-      const idx = reports.value.findIndex((r) => r.id === id)
-      if (idx !== -1) reports.value[idx] = res.data.data
-      return res.data.data
+      return setCurrent(res.data.data)
+    } finally {
+      saving.value = false
+    }
+  }
+
+  async function saveDays(id: string, tage: SaveDayPayload[]) {
+    saving.value = true
+    try {
+      const res = await api.put<{ data: Report }>(`/berichte/${id}/tage`, { tage })
+      return setCurrent(res.data.data)
     } finally {
       saving.value = false
     }
@@ -107,10 +145,7 @@ export const useReportStore = defineStore('report', () => {
     saving.value = true
     try {
       const res = await api.post<{ data: Report }>(`/berichte/${id}/submit`)
-      currentReport.value = res.data.data
-      const idx = reports.value.findIndex((r) => r.id === id)
-      if (idx !== -1) reports.value[idx] = res.data.data
-      return res.data.data
+      return setCurrent(res.data.data)
     } finally {
       saving.value = false
     }
@@ -120,10 +155,7 @@ export const useReportStore = defineStore('report', () => {
     saving.value = true
     try {
       const res = await api.post<{ data: Report }>(`/berichte/${id}/review`, { entscheidung, kommentar })
-      currentReport.value = res.data.data
-      const idx = reports.value.findIndex((r) => r.id === id)
-      if (idx !== -1) reports.value[idx] = res.data.data
-      return res.data.data
+      return setCurrent(res.data.data)
     } finally {
       saving.value = false
     }
@@ -133,10 +165,7 @@ export const useReportStore = defineStore('report', () => {
     saving.value = true
     try {
       const res = await api.post<{ data: Report }>(`/berichte/${id}/visieren`)
-      currentReport.value = res.data.data
-      const idx = reports.value.findIndex((r) => r.id === id)
-      if (idx !== -1) reports.value[idx] = res.data.data
-      return res.data.data
+      return setCurrent(res.data.data)
     } finally {
       saving.value = false
     }
@@ -162,7 +191,7 @@ export const useReportStore = defineStore('report', () => {
 
   return {
     reports, currentReport, comments, loading, saving, total, page, limit,
-    fetchReports, fetchReport, createReport, updateReport, submitReport,
+    fetchReports, fetchReport, createReport, updateReport, saveDays, submitReport,
     reviewReport, signReport, fetchComments, addComment, $reset,
   }
 })
