@@ -19,48 +19,68 @@ function escapePdf(text: string): string {
     .replace(/\)/g, '\\)');
 }
 
-export function buildSimplePdf(title: string, bodyLines: string[]): Buffer {
-  const contentParts: string[] = [
-    'BT',
-    '/F1 16 Tf',
-    '50 790 Td',
-    `(${escapePdf(title)}) Tj`,
-    '/F1 11 Tf',
-    '0 -28 Td',
-  ];
+const PAGE_TOP = 790;
+const PAGE_BOTTOM = 50;
+const TITLE_GAP = 28;
+const LINE_HEIGHT = 16;
+const FIRST_PAGE_LINES = Math.floor((PAGE_TOP - TITLE_GAP - PAGE_BOTTOM) / LINE_HEIGHT);
+const FOLLOW_PAGE_LINES = Math.floor((PAGE_TOP - PAGE_BOTTOM) / LINE_HEIGHT);
 
-  for (const line of bodyLines) {
-    const wrapped = wrapLine(line, 95);
-    for (const wrappedLine of wrapped) {
-      contentParts.push(`(${escapePdf(wrappedLine)}) Tj`);
-      contentParts.push('0 -16 Td');
-    }
+function pageContent(lines: string[], title?: string): string {
+  const parts: string[] = ['BT'];
+  if (title !== undefined) {
+    parts.push('/F1 16 Tf', `50 ${PAGE_TOP} Td`, `(${escapePdf(title)}) Tj`, '/F1 11 Tf', `0 -${TITLE_GAP} Td`);
+  } else {
+    parts.push('/F1 11 Tf', `50 ${PAGE_TOP} Td`);
   }
-  contentParts.push('ET');
-  const content = contentParts.join('\n');
+  for (const line of lines) {
+    parts.push(`(${escapePdf(line)}) Tj`, `0 -${LINE_HEIGHT} Td`);
+  }
+  parts.push('ET');
+  return parts.join('\n');
+}
 
+function paginate(lines: string[]): string[][] {
+  const pages: string[][] = [lines.slice(0, FIRST_PAGE_LINES)];
+  for (let i = FIRST_PAGE_LINES; i < lines.length; i += FOLLOW_PAGE_LINES) {
+    pages.push(lines.slice(i, i + FOLLOW_PAGE_LINES));
+  }
+  return pages;
+}
+
+export function buildSimplePdf(title: string, bodyLines: string[]): Buffer {
+  const wrapped = bodyLines.flatMap((line) => wrapLine(line, 95));
+  const pages = paginate(wrapped);
+
+  // Object layout: 1 catalog, 2 pages, 3 font, then (page, content) pairs.
   const objects: string[] = [];
+  const pageIds = pages.map((_, i) => 4 + i * 2);
   objects[1] = '<< /Type /Catalog /Pages 2 0 R >>';
-  objects[2] = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
-  objects[3] =
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
-    '/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>';
-  objects[4] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
-  objects[5] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(' ')}] /Count ${pages.length} >>`;
+  objects[3] = '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>';
+  pages.forEach((lines, i) => {
+    const pageId = pageIds[i];
+    const content = pageContent(lines, i === 0 ? title : undefined);
+    objects[pageId] =
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] ' +
+      `/Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`;
+    objects[pageId + 1] = `<< /Length ${content.length} >>\nstream\n${content}\nendstream`;
+  });
 
+  const objectCount = objects.length - 1;
   let pdf = '%PDF-1.4\n';
   const offsets: number[] = [0];
-  for (let i = 1; i <= 5; i += 1) {
+  for (let i = 1; i <= objectCount; i += 1) {
     offsets[i] = pdf.length;
     pdf += `${i} 0 obj\n${objects[i]}\nendobj\n`;
   }
 
   const xrefStart = pdf.length;
-  pdf += 'xref\n0 6\n0000000000 65535 f \n';
-  for (let i = 1; i <= 5; i += 1) {
+  pdf += `xref\n0 ${objectCount + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objectCount; i += 1) {
     pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
   }
-  pdf += `trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  pdf += `trailer\n<< /Size ${objectCount + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
 
   return Buffer.from(pdf, 'latin1');
 }

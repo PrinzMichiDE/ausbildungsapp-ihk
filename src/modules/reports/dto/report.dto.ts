@@ -1,6 +1,8 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { ReportStatus, ReportTyp } from '@prisma/client';
+import { ReportDayArt, ReportStatus, ReportTyp } from '@prisma/client';
+import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
   IsArray,
   IsDateString,
   IsEnum,
@@ -13,7 +15,14 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateNested,
 } from 'class-validator';
+
+/** Absolute upper bound per activity; the effective daily limit is applied in the service. */
+export const MAX_ACTIVITY_MINUTES = 600;
+export const MIN_ACTIVITY_MINUTES = 5;
+export const MAX_ACTIVITIES_PER_DAY = 30;
+export const MAX_ACTIVITY_DESCRIPTION = 500;
 
 export enum AttachmentTyp {
   screenshot = 'screenshot',
@@ -30,17 +39,18 @@ export enum KommentarArt {
 }
 
 export class CreateReportDto {
-  @ApiProperty({ example: 'KW 12 – Netzwerkinfrastruktur' })
+  @ApiProperty({ example: 'KW 42 – Netzwerkinfrastruktur' })
   @IsString()
   @MinLength(3)
   @MaxLength(200)
   titel: string;
 
-  @ApiProperty({ enum: ReportTyp, example: ReportTyp.betrieb })
+  @ApiProperty({ enum: ReportTyp, example: ReportTyp.betrieb, required: false })
+  @IsOptional()
   @IsEnum(ReportTyp)
-  typ: ReportTyp;
+  typ?: ReportTyp;
 
-  @ApiProperty({ example: 12, minimum: 1, maximum: 53 })
+  @ApiProperty({ example: 42, minimum: 1, maximum: 53 })
   @IsInt()
   @Min(1)
   @Max(53)
@@ -51,25 +61,6 @@ export class CreateReportDto {
   @Min(2000)
   @Max(2100)
   jahr: number;
-
-  @ApiProperty({ example: '2026-03-16' })
-  @IsDateString()
-  datumVon: string;
-
-  @ApiProperty({ example: '2026-03-20' })
-  @IsDateString()
-  datumBis: string;
-
-  @ApiProperty({ description: 'Markdown inkl. Code-Blöcken' })
-  @IsString()
-  @MinLength(1)
-  inhaltMarkdown: string;
-
-  @ApiProperty({ required: false, isArray: true })
-  @IsOptional()
-  @IsArray()
-  @IsUUID('4', { each: true })
-  taskIds?: string[];
 }
 
 export class UpdateReportDto {
@@ -84,41 +75,69 @@ export class UpdateReportDto {
   @IsOptional()
   @IsEnum(ReportTyp)
   typ?: ReportTyp;
+}
 
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  @Min(1)
-  @Max(53)
-  kalenderwoche?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsInt()
-  @Min(2000)
-  @Max(2100)
-  jahr?: number;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsDateString()
-  datumVon?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
-  @IsDateString()
-  datumBis?: string;
-
-  @ApiProperty({ required: false })
-  @IsOptional()
+export class ReportActivityInputDto {
+  @ApiProperty({ example: 'Switch im Serverraum konfiguriert', maxLength: MAX_ACTIVITY_DESCRIPTION })
   @IsString()
-  inhaltMarkdown?: string;
+  @MinLength(1)
+  @MaxLength(MAX_ACTIVITY_DESCRIPTION)
+  beschreibung: string;
 
-  @ApiProperty({ required: false, isArray: true })
+  @ApiProperty({ example: 150, description: 'Dauer in Minuten (Anzeige als hh:mm)', minimum: MIN_ACTIVITY_MINUTES, maximum: MAX_ACTIVITY_MINUTES })
+  @IsInt()
+  @Min(MIN_ACTIVITY_MINUTES)
+  @Max(MAX_ACTIVITY_MINUTES)
+  dauerMinuten: number;
+
+  @ApiProperty({ required: false, description: 'Verknüpfter, freigegebener Praxis-Task' })
   @IsOptional()
+  @IsUUID('4')
+  taskId?: string;
+}
+
+export class ReportDayInputDto {
+  @ApiProperty({ example: '2026-10-12' })
+  @IsDateString({ strict: true })
+  datum: string;
+
+  @ApiProperty({ enum: ReportDayArt, example: ReportDayArt.betrieb })
+  @IsEnum(ReportDayArt)
+  art: ReportDayArt;
+
+  @ApiProperty({ type: [ReportActivityInputDto] })
   @IsArray()
-  @IsUUID('4', { each: true })
-  taskIds?: string[];
+  @ArrayMaxSize(MAX_ACTIVITIES_PER_DAY)
+  @ValidateNested({ each: true })
+  @Type(() => ReportActivityInputDto)
+  aktivitaeten: ReportActivityInputDto[];
+}
+
+export class SaveReportDaysDto {
+  @ApiProperty({ type: [ReportDayInputDto], description: 'Komplette Woche; ersetzt alle bisherigen Tage' })
+  @IsArray()
+  @ArrayMaxSize(7)
+  @ValidateNested({ each: true })
+  @Type(() => ReportDayInputDto)
+  tage: ReportDayInputDto[];
+}
+
+export class ReportActivityResponseDto {
+  @ApiProperty() id: string;
+  @ApiProperty() beschreibung: string;
+  @ApiProperty() dauerMinuten: number;
+  @ApiProperty() sortierung: number;
+  @ApiProperty({ nullable: true }) taskId: string | null;
+  @ApiProperty({ nullable: true }) taskTitel: string | null;
+}
+
+export class ReportDayResponseDto {
+  @ApiProperty() id: string;
+  @ApiProperty({ example: '2026-10-12' }) datum: string;
+  @ApiProperty({ enum: ReportDayArt }) art: ReportDayArt;
+  @ApiProperty() summeMinuten: number;
+  @ApiProperty({ description: 'Tagesgrenze in Minuten (JArbSchG-abhängig)' }) maxMinuten: number;
+  @ApiProperty({ type: [ReportActivityResponseDto] }) aktivitaeten: ReportActivityResponseDto[];
 }
 
 export class ReviewReportDto {
@@ -188,6 +207,15 @@ export class ReportResponseDto {
 
   @ApiProperty({ isArray: true })
   taskIds: string[];
+
+  @ApiProperty({ description: 'Summe aller Aktivitäten der Woche in Minuten' })
+  summeMinuten: number;
+
+  @ApiProperty({ nullable: true, description: 'Wochengrenze in Minuten (nur bei Minderjährigen)' })
+  maxMinutenWoche: number | null;
+
+  @ApiProperty({ type: [ReportDayResponseDto], required: false, description: 'Nur in der Detailansicht' })
+  tage?: ReportDayResponseDto[];
 
   @ApiProperty()
   createdAt: Date;

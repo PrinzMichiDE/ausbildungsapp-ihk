@@ -4,8 +4,10 @@
   Delete,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
+  Put,
   Query,
   Res,
 } from '@nestjs/common';
@@ -26,6 +28,7 @@ import {
   CreateReportDto,
   ReportResponseDto,
   ReviewReportDto,
+  SaveReportDaysDto,
   UpdateReportDto,
 } from './dto/report.dto.js';
 
@@ -77,7 +80,7 @@ export class BerichteController {
     return this.service.findOne(id, user);
   }
 
-  @ApiOperation({ summary: 'Bearbeitet einen Bericht (Azubi, nur entwurf)' })
+  @ApiOperation({ summary: 'Bearbeitet Titel/Typ eines Berichts (Azubi, nur entwurf)' })
   @ApiResponse({ status: 200, type: ReportResponseDto })
   @Roles(Role.azubi)
   @Patch(':id')
@@ -87,6 +90,21 @@ export class BerichteController {
     @Body() dto: UpdateReportDto,
   ): Promise<ReportResponseDto> {
     return this.service.update(id, user, dto);
+  }
+
+  @ApiOperation({ summary: 'Speichert die komplette Woche (Tage + Aktivitäten) eines Berichts (Azubi, nur entwurf)' })
+  @ApiBody({ type: SaveReportDaysDto })
+  @ApiResponse({ status: 200, type: ReportResponseDto })
+  @ApiResponse({ status: 400, description: 'Tages-/Wochengrenze überschritten oder ungültiger Tag' })
+  @ApiResponse({ status: 409, description: 'Bericht nicht im Status entwurf oder Task nicht freigegeben' })
+  @Roles(Role.azubi)
+  @Put(':id/tage')
+  saveDays(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: CurrentUser,
+    @Body() dto: SaveReportDaysDto,
+  ): Promise<ReportResponseDto> {
+    return this.service.saveDays(id, user, dto);
   }
 
   @ApiOperation({ summary: 'Löscht einen Bericht (Azubi, nur entwurf)' })
@@ -202,7 +220,7 @@ export class BerichteController {
     return this.service.getAttachments(id, user);
   }
 
-  @ApiOperation({ summary: 'Zeiterfassung je Tätigkeit' })
+  @ApiOperation({ summary: 'Zeiterfassung je Tätigkeit', deprecated: true, description: 'Veraltet – Zeiten werden pro Aktivität über PUT /berichte/:id/tage erfasst.' })
   @ApiBody({ type: AddTimeEntryDto })
   @ApiResponse({ status: 201, description: 'Zeiteintrag erstellt' })
   @ApiResponse({ status: 403, description: 'Keine Berechtigung' })
@@ -215,7 +233,7 @@ export class BerichteController {
     return this.service.addTimeEntry(id, user, dto);
   }
 
-  @ApiOperation({ summary: 'Listet Zeiteinträge eines Berichts' })
+  @ApiOperation({ summary: 'Listet Zeiteinträge eines Berichts', deprecated: true })
   @ApiResponse({ status: 200, description: 'Liste der Zeiteinträge' })
   @Get(':id/time-entries')
   getTimeEntries(

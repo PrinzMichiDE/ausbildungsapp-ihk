@@ -1,15 +1,24 @@
-﻿import {
+import {
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, NotificationCategory, ReportStatus, ReportTyp } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
+import {
+  AbwesenheitTyp,
+  Prisma,
+  NotificationCategory,
+  ReportDayArt,
+  ReportStatus,
+  ReportTyp,
+} from '@prisma/client';
 import { PrismaService } from '../../database/prisma.service.js';
 import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
 import { CurrentUser } from '../../common/decorators/current-user.type.js';
 import { Role } from '../../common/constants/roles.js';
 import { ERROR_CODES } from '../../common/constants/error-codes.js';
 import { BusinessException } from '../../common/exceptions/business.exception.js';
+import { AppConfig } from '../../config/configuration.js';
 import { AuditService } from '../audit/audit.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { buildSimplePdf } from '../../common/utils/pdf.js';
@@ -18,19 +27,71 @@ import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import {
   AddCommentDto,
   CreateReportDto,
+  ReportDayResponseDto,
   ReportResponseDto,
   ReviewReportDto,
+  SaveReportDaysDto,
   UpdateReportDto,
 } from './dto/report.dto.js';
+import {
+  DAY_ART_LABELS,
+  formatMinutes,
+  isoWeekDays,
+  isoWeekRange,
+  renderWeekMarkdown,
+  toIsoDate,
+  validateWeek,
+  type ReportLimits,
+  type WeekValidationResult,
+} from './report-week.js';
+
+const WORKING_DAYS_PER_WEEK = 5;
+
+const ABSENCE_TO_DAY_ART: Readonly<Record<AbwesenheitTyp, ReportDayArt>> = {
+  urlaub: ReportDayArt.urlaub,
+  krank: ReportDayArt.krank,
+  berufsschule: ReportDayArt.berufsschule,
+};
+
+const REPORT_DETAIL_INCLUDE = {
+  reportTasks: true,
+  tage: {
+    orderBy: { datum: 'asc' },
+    include: {
+      aktivitaeten: {
+        orderBy: { sortierung: 'asc' },
+        include: { task: { select: { titel: true } } },
+      },
+    },
+  },
+} satisfies Prisma.ReportInclude;
+
+const REPORT_LIST_INCLUDE = {
+  reportTasks: true,
+  tage: { select: { aktivitaeten: { select: { dauerMinuten: true } } } },
+} satisfies Prisma.ReportInclude;
+
+type ReportDetail = Prisma.ReportGetPayload<{ include: typeof REPORT_DETAIL_INCLUDE }>;
+type ReportListItem = Prisma.ReportGetPayload<{ include: typeof REPORT_LIST_INCLUDE }>;
 
 @Injectable()
 export class BerichteService {
+  private readonly limits: ReportLimits;
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly scope: AccessScopeService,
     private readonly notifications: NotificationsService,
     private readonly audit: AuditService,
-  ) {}
+    configService: ConfigService,
+  ) {
+    const reports = configService.get<AppConfig['reports']>('reports');
+    this.limits = {
+      maxMinutesPerDay: reports?.maxMinutesPerDay ?? 600,
+      maxMinutesPerDayMinor: reports?.maxMinutesPerDayMinor ?? 480,
+      maxMinutesPerWeekMinor: reports?.maxMinutesPerWeekMinor ?? 2400,
+    };
+  }
 
   async create(
     currentUser: CurrentUser,
@@ -42,35 +103,63 @@ export class BerichteService {
         message: 'Nur Azubis dürfen Berichte erstellen',
       });
     }
+    const azubiId = currentUser.azubiId;
 
-    const datumVon = new Date(dto.datumVon);
-    const datumBis = new Date(dto.datumBis);
-    if (datumVon >= datumBis) {
+    let range: { montag: Date; sonntag: Date };
+    try {
+      range = isoWeekRange(dto.jahr, dto.kalenderwoche);
+    } catch (error) {
       throw new BusinessException(
-        ERROR_CODES.VALIDATION_FAILED,
-        'datumVon muss vor datumBis liegen',
+        ERROR_CODES.REPORT_INVALID_DAY,
+        error instanceof Error ? error.message : 'Ungültige Kalenderwoche',
         400,
       );
     }
 
-    await this.assertTasksReleased(dto.taskIds ?? []);
+    const existing = await this.prisma.report.findUnique({
+      where: { azubiId_jahr_kalenderwoche: { azubiId, jahr: dto.jahr, kalenderwoche: dto.kalenderwoche } },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new BusinessException(
+        ERROR_CODES.REPORT_WEEK_EXISTS,
+        `Für KW ${dto.kalenderwoche}/${dto.jahr} existiert bereits ein Bericht`,
+        409,
+        { reportId: existing.id },
+      );
+    }
+
+    const workingDays = isoWeekDays(dto.jahr, dto.kalenderwoche).slice(0, WORKING_DAYS_PER_WEEK);
+    const absences = await this.prisma.abwesenheit.findMany({
+      where: { azubiId, von: { lte: range.sonntag }, bis: { gte: range.montag } },
+      select: { typ: true, von: true, bis: true },
+    });
 
     const report = await this.prisma.report.create({
       data: {
-        azubiId: currentUser.azubiId,
+        azubiId,
         titel: dto.titel,
-        typ: dto.typ,
+        typ: dto.typ ?? ReportTyp.betrieb,
         kalenderwoche: dto.kalenderwoche,
         jahr: dto.jahr,
-        datumVon: new Date(dto.datumVon),
-        datumBis: new Date(dto.datumBis),
-        inhaltMarkdown: dto.inhaltMarkdown,
+        datumVon: range.montag,
+        datumBis: range.sonntag,
+        inhaltMarkdown: '',
         status: ReportStatus.entwurf,
-        reportTasks: {
-          create: (dto.taskIds ?? []).map((taskId) => ({ taskId })),
+        tage: {
+          create: workingDays.map((datum) => ({
+            datum: new Date(`${datum}T00:00:00Z`),
+            art: this.prefillDayArt(datum, absences),
+          })),
         },
       },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
+    });
+
+    const withMarkdown = await this.prisma.report.update({
+      where: { id: report.id },
+      data: { inhaltMarkdown: renderWeekMarkdown(this.toRenderable(report)) },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.audit.create(currentUser, {
@@ -79,7 +168,7 @@ export class BerichteService {
       entityId: report.id,
     });
 
-    return this.toResponse(report);
+    return this.toDetailResponse(withMarkdown, await this.loadGeburtsdatum(azubiId));
   }
 
   async findAll(
@@ -110,7 +199,7 @@ export class BerichteService {
     const [items, total] = await this.prisma.$transaction([
       this.prisma.report.findMany({
         where,
-        include: { reportTasks: true },
+        include: REPORT_LIST_INCLUDE,
         orderBy: [{ jahr: 'desc' }, { kalenderwoche: 'desc' }],
         skip: (query.page - 1) * query.limit,
         take: query.limit,
@@ -119,7 +208,7 @@ export class BerichteService {
     ]);
 
     return withPagination(
-      items.map((r) => this.toResponse(r)),
+      items.map((r) => this.toListResponse(r)),
       query.page,
       query.limit,
       total,
@@ -132,7 +221,7 @@ export class BerichteService {
   ): Promise<ReportResponseDto> {
     await this.scope.assertCanAccessBericht(currentUser, id);
     const report = await this.load(id);
-    return this.toResponse(report);
+    return this.toDetailResponse(report, await this.loadGeburtsdatum(report.azubiId));
   }
 
   async update(
@@ -140,49 +229,15 @@ export class BerichteService {
     currentUser: CurrentUser,
     dto: UpdateReportDto,
   ): Promise<ReportResponseDto> {
-    await this.loadOwned(currentUser, id, ReportStatus.entwurf);
-    await this.assertTasksReleased(dto.taskIds ?? []);
-
-    if (dto.datumVon !== undefined && dto.datumBis !== undefined) {
-      const datumVon = new Date(dto.datumVon);
-      const datumBis = new Date(dto.datumBis);
-      if (datumVon >= datumBis) {
-        throw new BusinessException(
-          ERROR_CODES.VALIDATION_FAILED,
-          'datumVon muss vor datumBis liegen',
-          400,
-        );
-      }
-    }
+    const report = await this.loadOwned(currentUser, id, ReportStatus.entwurf);
 
     const updated = await this.prisma.report.update({
       where: { id },
       data: {
         ...(dto.titel !== undefined ? { titel: dto.titel } : {}),
         ...(dto.typ !== undefined ? { typ: dto.typ } : {}),
-        ...(dto.kalenderwoche !== undefined
-          ? { kalenderwoche: dto.kalenderwoche }
-          : {}),
-        ...(dto.jahr !== undefined ? { jahr: dto.jahr } : {}),
-        ...(dto.datumVon !== undefined
-          ? { datumVon: new Date(dto.datumVon) }
-          : {}),
-        ...(dto.datumBis !== undefined
-          ? { datumBis: new Date(dto.datumBis) }
-          : {}),
-        ...(dto.inhaltMarkdown !== undefined
-          ? { inhaltMarkdown: dto.inhaltMarkdown }
-          : {}),
-        ...(dto.taskIds !== undefined
-          ? {
-              reportTasks: {
-                deleteMany: {},
-                create: dto.taskIds.map((taskId) => ({ taskId })),
-              },
-            }
-          : {}),
       },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.audit.create(currentUser, {
@@ -191,7 +246,85 @@ export class BerichteService {
       entityId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, await this.loadGeburtsdatum(report.azubiId));
+  }
+
+  async saveDays(
+    id: string,
+    currentUser: CurrentUser,
+    dto: SaveReportDaysDto,
+  ): Promise<ReportResponseDto> {
+    const report = await this.loadOwned(currentUser, id, ReportStatus.entwurf);
+    const geburtsdatum = await this.loadGeburtsdatum(report.azubiId);
+
+    const sortedTage = [...dto.tage]
+      .sort((a, b) => a.datum.localeCompare(b.datum))
+      .map((t) => ({
+        ...t,
+        aktivitaeten: t.aktivitaeten.map((a) => ({ ...a, beschreibung: a.beschreibung.trim() })),
+      }));
+    this.assertDescriptionsPresent(sortedTage);
+    this.assertWeekValid(
+      validateWeek(sortedTage, isoWeekDays(report.jahr, report.kalenderwoche), geburtsdatum, this.limits),
+    );
+
+    const taskIds = [
+      ...new Set(sortedTage.flatMap((t) => t.aktivitaeten.map((a) => a.taskId)).filter((t): t is string => !!t)),
+    ];
+    await this.assertTasksReleased(taskIds);
+    const taskTitles = await this.loadTaskTitles(taskIds);
+
+    const inhaltMarkdown = renderWeekMarkdown(
+      sortedTage.map((t) => ({
+        datum: t.datum,
+        art: t.art,
+        aktivitaeten: t.aktivitaeten.map((a) => ({
+          beschreibung: a.beschreibung,
+          dauerMinuten: a.dauerMinuten,
+          taskTitel: a.taskId ? (taskTitles.get(a.taskId) ?? null) : null,
+        })),
+      })),
+    );
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      await tx.reportDay.deleteMany({ where: { reportId: id } });
+      for (const tag of sortedTage) {
+        await tx.reportDay.create({
+          data: {
+            reportId: id,
+            datum: new Date(`${tag.datum}T00:00:00Z`),
+            art: tag.art,
+            aktivitaeten: {
+              create: tag.aktivitaeten.map((a, index) => ({
+                beschreibung: a.beschreibung,
+                dauerMinuten: a.dauerMinuten,
+                sortierung: index,
+                taskId: a.taskId ?? null,
+              })),
+            },
+          },
+        });
+      }
+      return tx.report.update({
+        where: { id },
+        data: {
+          inhaltMarkdown,
+          reportTasks: {
+            deleteMany: {},
+            create: taskIds.map((taskId) => ({ taskId })),
+          },
+        },
+        include: REPORT_DETAIL_INCLUDE,
+      });
+    });
+
+    await this.audit.create(currentUser, {
+      action: 'REPORT_UPDATED',
+      entity: 'report',
+      entityId: id,
+    });
+
+    return this.toDetailResponse(updated, geburtsdatum);
   }
 
   async remove(id: string, currentUser: CurrentUser): Promise<void> {
@@ -207,10 +340,26 @@ export class BerichteService {
 
   async submit(id: string, currentUser: CurrentUser): Promise<ReportResponseDto> {
     const report = await this.loadOwned(currentUser, id, ReportStatus.entwurf);
+    const geburtsdatum = await this.loadGeburtsdatum(report.azubiId);
+
+    this.assertWeekValid(
+      validateWeek(
+        report.tage.map((t) => ({
+          datum: toIsoDate(t.datum),
+          art: t.art,
+          aktivitaeten: t.aktivitaeten,
+        })),
+        isoWeekDays(report.jahr, report.kalenderwoche),
+        geburtsdatum,
+        this.limits,
+        { requireComplete: true },
+      ),
+    );
+
     const updated = await this.prisma.report.update({
       where: { id: report.id },
       data: { status: ReportStatus.eingereicht },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.notifyReviewers(
@@ -238,7 +387,7 @@ export class BerichteService {
       entityId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, geburtsdatum);
   }
 
   async addAttachment(
@@ -346,7 +495,7 @@ export class BerichteService {
     const updated = await this.prisma.report.update({
       where: { id },
       data: { status: nextStatus },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.notifications.create({
@@ -364,7 +513,7 @@ export class BerichteService {
       referenceId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, await this.loadGeburtsdatum(updated.azubiId));
   }
 
   async visieren(
@@ -395,7 +544,7 @@ export class BerichteService {
         signiertVon: currentUser.id,
         signiertAm: new Date(),
       },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.notifications.create({
@@ -413,7 +562,7 @@ export class BerichteService {
       entityId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, await this.loadGeburtsdatum(updated.azubiId));
   }
 
   async archivieren(
@@ -440,7 +589,7 @@ export class BerichteService {
     const updated = await this.prisma.report.update({
       where: { id },
       data: { status: ReportStatus.archiviert, archiviertAm: new Date() },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     await this.audit.create(currentUser, {
@@ -449,7 +598,7 @@ export class BerichteService {
       entityId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, await this.loadGeburtsdatum(updated.azubiId));
   }
 
   async cancel(
@@ -461,7 +610,7 @@ export class BerichteService {
     const updated = await this.prisma.report.update({
       where: { id: report.id },
       data: { status: ReportStatus.entwurf },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
 
     const reviewers = await this.prisma.user.findMany({
@@ -489,7 +638,7 @@ export class BerichteService {
       entityId: id,
     });
 
-    return this.toResponse(updated);
+    return this.toDetailResponse(updated, await this.loadGeburtsdatum(updated.azubiId));
   }
 
   async addComment(
@@ -526,14 +675,25 @@ export class BerichteService {
       select: { firstName: true, lastName: true },
     });
 
+    const wochenSumme = report.tage
+      .flatMap((t) => t.aktivitaeten)
+      .reduce((acc, a) => acc + a.dauerMinuten, 0);
+
     const lines = [
       `Auszubildende(r): ${azubi?.firstName ?? ''} ${azubi?.lastName ?? ''}`,
-      `Kalenderwoche: ${report.kalenderwoche} / Jahr: ${report.jahr}`,
-      `Typ: ${report.typ}   Status: ${report.status}`,
-      `Zeitraum: ${report.datumVon.toISOString().slice(0, 10)} bis ${report.datumBis.toISOString().slice(0, 10)}`,
+      `Kalenderwoche: ${report.kalenderwoche} / Jahr: ${report.jahr}   Status: ${report.status}`,
+      `Zeitraum: ${toIsoDate(report.datumVon)} bis ${toIsoDate(report.datumBis)}`,
       '',
-      report.inhaltMarkdown.replace(/[#*_`>-]/g, '').slice(0, 8000),
     ];
+    for (const tag of report.tage) {
+      const summe = tag.aktivitaeten.reduce((acc, a) => acc + a.dauerMinuten, 0);
+      lines.push(`${toIsoDate(tag.datum)}  ${DAY_ART_LABELS[tag.art]}  (${formatMinutes(summe)})`);
+      for (const a of tag.aktivitaeten) {
+        const task = a.task ? `  [Task: ${a.task.titel}]` : '';
+        lines.push(`    ${formatMinutes(a.dauerMinuten)}  ${a.beschreibung}${task}`);
+      }
+    }
+    lines.push('', `Wochensumme: ${formatMinutes(wochenSumme)}`);
 
     return buildSimplePdf(`Berichtsheft - ${report.titel}`, lines);
   }
@@ -572,7 +732,7 @@ export class BerichteService {
   private async load(id: string) {
     const report = await this.prisma.report.findUnique({
       where: { id },
-      include: { reportTasks: true },
+      include: REPORT_DETAIL_INCLUDE,
     });
     if (!report) {
       throw new NotFoundException({
@@ -667,7 +827,7 @@ export class BerichteService {
       this.prisma.report.findMany({
         where,
         include: {
-          reportTasks: true,
+          ...REPORT_LIST_INCLUDE,
           azubi: {
             select: { firstName: true, lastName: true },
           },
@@ -680,7 +840,7 @@ export class BerichteService {
     ]);
 
     const mapped = items.map((r) => ({
-      ...this.toResponse(r),
+      ...this.toListResponse(r),
       azubiName: `${r.azubi.firstName} ${r.azubi.lastName}`,
     }));
 
@@ -765,7 +925,7 @@ export class BerichteService {
     return [header, ...rows].join('\n');
   }
 
-  private toResponse(report: {
+  private toBaseResponse(report: {
     id: string;
     azubiId: string;
     titel: string;
@@ -781,7 +941,7 @@ export class BerichteService {
     archiviertAm: Date | null;
     reportTasks: Array<{ taskId: string }>;
     createdAt: Date;
-  }): ReportResponseDto {
+  }): Omit<ReportResponseDto, 'summeMinuten' | 'maxMinutenWoche' | 'tage'> {
     return {
       id: report.id,
       azubiId: report.azubiId,
@@ -799,5 +959,115 @@ export class BerichteService {
       taskIds: report.reportTasks.map((rt) => rt.taskId),
       createdAt: report.createdAt,
     };
+  }
+
+  private toListResponse(report: ReportListItem): ReportResponseDto {
+    const summeMinuten = report.tage
+      .flatMap((t) => t.aktivitaeten)
+      .reduce((acc, a) => acc + a.dauerMinuten, 0);
+    return { ...this.toBaseResponse(report), summeMinuten, maxMinutenWoche: null };
+  }
+
+  private toDetailResponse(report: ReportDetail, geburtsdatum: string | null): ReportResponseDto {
+    const weekDays = isoWeekDays(report.jahr, report.kalenderwoche);
+    const summary = validateWeek(
+      report.tage.map((t) => ({ datum: toIsoDate(t.datum), art: t.art, aktivitaeten: t.aktivitaeten })),
+      weekDays,
+      geburtsdatum,
+      this.limits,
+    );
+    const maxByDate = new Map(summary.tage.map((s) => [s.datum, s]));
+
+    const tage: ReportDayResponseDto[] = report.tage.map((t) => {
+      const datum = toIsoDate(t.datum);
+      return {
+        id: t.id,
+        datum,
+        art: t.art,
+        summeMinuten: maxByDate.get(datum)?.summeMinuten ?? 0,
+        maxMinuten: maxByDate.get(datum)?.maxMinuten ?? this.limits.maxMinutesPerDay,
+        aktivitaeten: t.aktivitaeten.map((a) => ({
+          id: a.id,
+          beschreibung: a.beschreibung,
+          dauerMinuten: a.dauerMinuten,
+          sortierung: a.sortierung,
+          taskId: a.taskId,
+          taskTitel: a.task?.titel ?? null,
+        })),
+      };
+    });
+
+    return {
+      ...this.toBaseResponse(report),
+      summeMinuten: summary.summeMinuten,
+      maxMinutenWoche: summary.maxMinutenWoche,
+      tage,
+    };
+  }
+
+  private toRenderable(report: ReportDetail) {
+    return report.tage.map((t) => ({
+      datum: toIsoDate(t.datum),
+      art: t.art,
+      aktivitaeten: t.aktivitaeten.map((a) => ({
+        beschreibung: a.beschreibung,
+        dauerMinuten: a.dauerMinuten,
+        taskTitel: a.task?.titel ?? null,
+      })),
+    }));
+  }
+
+  private prefillDayArt(
+    datum: string,
+    absences: ReadonlyArray<{ typ: AbwesenheitTyp; von: Date; bis: Date }>,
+  ): ReportDayArt {
+    const match = absences.find((a) => toIsoDate(a.von) <= datum && datum <= toIsoDate(a.bis));
+    return match ? ABSENCE_TO_DAY_ART[match.typ] : ReportDayArt.betrieb;
+  }
+
+  private async loadGeburtsdatum(azubiId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: azubiId },
+      select: { geburtsdatum: true },
+    });
+    return user?.geburtsdatum ? toIsoDate(user.geburtsdatum) : null;
+  }
+
+  private async loadTaskTitles(taskIds: string[]): Promise<Map<string, string>> {
+    if (taskIds.length === 0) {
+      return new Map();
+    }
+    const tasks = await this.prisma.task.findMany({
+      where: { id: { in: taskIds } },
+      select: { id: true, titel: true },
+    });
+    return new Map(tasks.map((t) => [t.id, t.titel]));
+  }
+
+  private assertDescriptionsPresent(
+    tage: ReadonlyArray<{ datum: string; aktivitaeten: ReadonlyArray<{ beschreibung: string }> }>,
+  ): void {
+    const empty = tage.find((t) => t.aktivitaeten.some((a) => a.beschreibung.length === 0));
+    if (empty) {
+      throw new BusinessException(
+        ERROR_CODES.VALIDATION_FAILED,
+        `${empty.datum}: Aktivität ohne Beschreibung`,
+        400,
+      );
+    }
+  }
+
+  private assertWeekValid(result: WeekValidationResult): void {
+    const [first] = result.errors;
+    if (!first) {
+      return;
+    }
+    const status = first.code === 'REPORT_INCOMPLETE' ? 409 : 400;
+    throw new BusinessException(
+      ERROR_CODES[first.code],
+      result.errors.map((e) => e.message).join('; '),
+      status,
+      result.errors,
+    );
   }
 }

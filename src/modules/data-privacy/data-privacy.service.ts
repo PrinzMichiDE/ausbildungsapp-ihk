@@ -227,6 +227,14 @@ export class DatenschutzService {
         await tx.reportComment.deleteMany({
           where: { reportId: { in: archivedIds } },
         });
+        await tx.reportActivity.updateMany({
+          where: { day: { reportId: { in: archivedIds } } },
+          data: { beschreibung: '[anonymisiert]', taskId: null },
+        });
+        await tx.reportVersion.updateMany({
+          where: { reportId: { in: archivedIds } },
+          data: { inhaltMarkdown: '[anonymisiert]' },
+        });
         await tx.report.updateMany({
           where: { id: { in: archivedIds } },
           data: {
@@ -554,6 +562,10 @@ export class DatenschutzService {
         include: {
           reportTasks: true,
           kommentare: true,
+          tage: {
+            orderBy: { datum: 'asc' },
+            include: { aktivitaeten: { orderBy: { sortierung: 'asc' } } },
+          },
         },
       }),
       this.prisma.zertifikat.findMany({ where: { azubiId: userId } }),
@@ -581,6 +593,7 @@ export class DatenschutzService {
             email: user.email,
             firstName: user.firstName,
             lastName: user.lastName,
+            geburtsdatum: user.geburtsdatum,
             isActive: user.isActive,
           }
         : {},
@@ -606,6 +619,15 @@ export class DatenschutzService {
         jahr: r.jahr,
         status: r.status,
         inhalt: r.inhaltMarkdown,
+        tage: r.tage.map((t) => ({
+          datum: t.datum,
+          art: t.art,
+          aktivitaeten: t.aktivitaeten.map((a) => ({
+            beschreibung: a.beschreibung,
+            dauerMinuten: a.dauerMinuten,
+            taskId: a.taskId,
+          })),
+        })),
         tasks: r.reportTasks.map((rt) => rt.taskId),
         kommentare: r.kommentare,
       })),

@@ -1,224 +1,281 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ReportsService } from './reports.service.js';
-import { PrismaService } from '../../database/prisma.service.js';
-import { AccessScopeService } from '../../common/rbac/access-scope.service.js';
-import { AuditService } from '../audit/audit.service.js';
-import { NotificationsService } from '../../users/notifications.service.js';
-import { ReportStatus, ReportTyp } from '../../common/constants/reports.js';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ForbiddenException } from '@nestjs/common';
+import { ReportDayArt, ReportStatus, ReportTyp } from '@prisma/client';
+import { BerichteService } from './reports.service.js';
+import { Role } from '../../common/constants/roles.js';
+import { BusinessException } from '../../common/exceptions/business.exception.js';
+import type { CurrentUser } from '../../common/decorators/current-user.type.js';
 
-vi.mock('../../common/utils/build-simple-pdf', () => ({
-  buildSimplePdf: vi.fn().mockResolvedValue({ pdfBuffer: Buffer.from('mock') }),
-}));
+const AZUBI_ID = '00000000-0000-4000-8000-000000000001';
+const REPORT_ID = '00000000-0000-4000-8000-0000000000aa';
+const TASK_ID = '00000000-0000-4000-8000-0000000000bb';
 
-describe('ReportsService', () => {
-  let service: ReportsService;
+const azubi = {
+  id: AZUBI_ID,
+  email: 'azubi@test.local',
+  roles: [Role.azubi],
+  abteilungIds: [],
+  azubiId: AZUBI_ID,
+} as unknown as CurrentUser;
+
+const day = (datum: string, art: ReportDayArt = ReportDayArt.betrieb, minuten: number[] = []) => ({
+  id: `day-${datum}`,
+  datum: new Date(`${datum}T00:00:00Z`),
+  art,
+  aktivitaeten: minuten.map((dauerMinuten, i) => ({
+    id: `act-${datum}-${i}`,
+    beschreibung: 'Arbeit',
+    dauerMinuten,
+    sortierung: i,
+    taskId: null,
+    task: null,
+  })),
+});
+
+const report = (overrides: Record<string, unknown> = {}) => ({
+  id: REPORT_ID,
+  azubiId: AZUBI_ID,
+  titel: 'KW 42',
+  typ: ReportTyp.betrieb,
+  kalenderwoche: 42,
+  jahr: 2026,
+  datumVon: new Date('2026-10-12T00:00:00Z'),
+  datumBis: new Date('2026-10-18T00:00:00Z'),
+  inhaltMarkdown: '',
+  status: ReportStatus.entwurf,
+  signiertVon: null,
+  signiertAm: null,
+  archiviertAm: null,
+  createdAt: new Date(),
+  reportTasks: [],
+  tage: [],
+  ...overrides,
+});
+
+describe('BerichteService', () => {
+  let service: BerichteService;
   let prisma: any;
-  let accessScopeService: any;
-  let auditService: any;
-  let notificationsService: any;
+  let audit: { create: ReturnType<typeof vi.fn> };
+  let geburtsdatum: Date | null;
+  let setReport: (r: ReturnType<typeof report>) => void;
 
-  const createMockPrisma = () => ({
-    report: {
-      findMany: vi.fn().mockResolvedValue([]),
-      findUnique: vi.fn().mockResolvedValue(null),
-      create: vi.fn().mockResolvedValue({ id: 'report-1', ...jest.requireActual('../../common/constants/reports') }),
-      update: vi.fn().mockResolvedValue({ id: 'report-1' }),
-      delete: vi.fn().mockResolvedValue({ id: 'report-1' }),
-    },
-    zertifikat: {
-      findMany: vi.fn().mockResolvedValue([]),
-    },
-    $queryRaw: vi.fn().mockResolvedValue([]),
-    $transaction: vi.fn().mockImplementation(async (fn: any) => fn(prisma)),
+  beforeEach(() => {
+    geburtsdatum = null;
+    let current = report();
+    setReport = (r) => {
+      current = r;
+    };
+    prisma = {
+      report: {
+        findUnique: vi.fn().mockImplementation(() => Promise.resolve(current)),
+        create: vi.fn().mockImplementation(({ data }) => {
+          current = report({ tage: data.tage.create.map((t: any) => day(t.datum.toISOString().slice(0, 10), t.art)) });
+          return Promise.resolve(current);
+        }),
+        update: vi.fn().mockImplementation(({ data }) => {
+          const { reportTasks: _ignored, ...scalars } = data;
+          current = { ...current, ...scalars };
+          return Promise.resolve(current);
+        }),
+      },
+      reportDay: { deleteMany: vi.fn(), create: vi.fn() },
+      reportVersion: { count: vi.fn().mockResolvedValue(0), create: vi.fn() },
+      abwesenheit: { findMany: vi.fn().mockResolvedValue([]) },
+      user: {
+        findUnique: vi.fn().mockImplementation(() => Promise.resolve({ geburtsdatum })),
+        findMany: vi.fn().mockResolvedValue([]),
+      },
+      task: {
+        count: vi.fn().mockResolvedValue(1),
+        findMany: vi.fn().mockResolvedValue([{ id: TASK_ID, titel: 'VLAN einrichten' }]),
+      },
+    };
+    prisma.$transaction = vi.fn().mockImplementation((fn: (tx: unknown) => unknown) => fn(prisma));
+    audit = { create: vi.fn() };
+    const config = { get: vi.fn().mockReturnValue({ maxMinutesPerDay: 600, maxMinutesPerDayMinor: 480, maxMinutesPerWeekMinor: 2400 }) };
+
+    service = new BerichteService(
+      prisma,
+      { assertCanAccessBericht: vi.fn(), getVisibleAzubiIds: vi.fn() } as any,
+      { create: vi.fn() } as any,
+      audit as any,
+      config as any,
+    );
   });
 
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      providers: [
-        ReportsService,
-        { provide: PrismaService, useFactory: () => createMockPrisma() },
-        { provide: AccessScopeService, useValue: { getScopeFilter: vi.fn().mockReturnValue({}) } },
-        { provide: AuditService, useValue: { log: vi.fn() } },
-        { provide: NotificationsService, useValue: { send: vi.fn() } },
-      ],
-    }).compile();
+  describe('create', () => {
+    it('derives the week dates and creates Monday to Friday', async () => {
+      prisma.report.findUnique.mockResolvedValueOnce(null);
 
-    service = module.get<ReportsService>(ReportsService);
-    prisma = module.get(PrismaService);
-    accessScopeService = module.get(AccessScopeService);
-    auditService = module.get(AuditService);
-    notificationsService = module.get(NotificationsService);
-  });
+      const result = await service.create(azubi, { titel: 'KW 42', kalenderwoche: 42, jahr: 2026 });
 
-  afterEach(() => {
-    vi.clearAllMocks();
-  });
-
-  describe('findAll', () => {
-    it('sollte alle Berichte für den aktuellen Benutzer zurückgeben', async () => {
-      (prisma.report.findMany as any).mockResolvedValueOnce([
-        { id: '1', titel: 'Test Bericht', status: ReportStatus.IN_BEARBEITUNG },
+      const data = prisma.report.create.mock.calls[0][0].data;
+      expect(data.datumVon.toISOString().slice(0, 10)).toBe('2026-10-12');
+      expect(data.datumBis.toISOString().slice(0, 10)).toBe('2026-10-18');
+      expect(data.tage.create.map((t: any) => t.datum.toISOString().slice(0, 10))).toEqual([
+        '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16',
       ]);
-
-      const result = await service.findAll({});
-
-      expect(prisma.report.findMany).toHaveBeenCalled();
-      expect(result).toHaveLength(1);
-      expect(result[0].titel).toBe('Test Bericht');
+      expect(result.tage).toHaveLength(5);
+      expect(audit.create).toHaveBeenCalledWith(azubi, expect.objectContaining({ action: 'REPORT_CREATED' }));
     });
 
-    it('sollte Berichte nach Status filtern', async () => {
-      (prisma.report.findMany as any).mockResolvedValueOnce([
-        { id: '1', titel: 'Abgeschlossener Bericht', status: ReportStatus.ABGESCHLOSSEN },
+    it('prefills day types from absences overlapping the week', async () => {
+      prisma.report.findUnique.mockResolvedValueOnce(null);
+      prisma.abwesenheit.findMany.mockResolvedValueOnce([
+        { typ: 'urlaub', von: new Date('2026-10-13T00:00:00Z'), bis: new Date('2026-10-14T00:00:00Z') },
+        { typ: 'berufsschule', von: new Date('2026-10-16T00:00:00Z'), bis: new Date('2026-10-16T00:00:00Z') },
       ]);
 
-      const result = await service.findAll({ status: ReportStatus.ABGESCHLOSSEN });
+      await service.create(azubi, { titel: 'KW 42', kalenderwoche: 42, jahr: 2026 });
 
-      expect(prisma.report.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ where: expect.objectContaining({ status: ReportStatus.ABGESCHLOSSEN }) }),
-      );
+      const arten = prisma.report.create.mock.calls[0][0].data.tage.create.map((t: any) => t.art);
+      expect(arten).toEqual(['betrieb', 'urlaub', 'urlaub', 'betrieb', 'berufsschule']);
+    });
+
+    it('rejects a second report for the same week', async () => {
+      prisma.report.findUnique.mockResolvedValueOnce({ id: REPORT_ID });
+
+      await expect(
+        service.create(azubi, { titel: 'KW 42', kalenderwoche: 42, jahr: 2026 }),
+      ).rejects.toMatchObject({ errorCode: 'REPORT_WEEK_EXISTS' });
+      expect(prisma.report.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects week 53 in a year with 52 weeks', async () => {
+      await expect(
+        service.create(azubi, { titel: 'KW 53', kalenderwoche: 53, jahr: 2025 }),
+      ).rejects.toBeInstanceOf(BusinessException);
+    });
+
+    it('only allows azubis', async () => {
+      await expect(
+        service.create({ ...azubi, roles: [Role.ausbilder], azubiId: null } as any, { titel: 'x', kalenderwoche: 1, jahr: 2026 }),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('saveDays', () => {
+    beforeEach(() => {
+      setReport(report());
+    });
+
+    it('replaces days in a transaction and derives markdown and task links', async () => {
+      await service.saveDays(REPORT_ID, azubi, {
+        tage: [{
+          datum: '2026-10-12',
+          art: ReportDayArt.betrieb,
+          aktivitaeten: [{ beschreibung: ' Switch konfiguriert ', dauerMinuten: 150, taskId: TASK_ID }],
+        }],
+      });
+
+      expect(prisma.$transaction).toHaveBeenCalled();
+      expect(prisma.reportDay.deleteMany).toHaveBeenCalledWith({ where: { reportId: REPORT_ID } });
+      const created = prisma.reportDay.create.mock.calls[0][0].data;
+      expect(created.aktivitaeten.create[0]).toMatchObject({ beschreibung: 'Switch konfiguriert', dauerMinuten: 150, taskId: TASK_ID });
+
+      const updateData = prisma.report.update.mock.calls[0][0].data;
+      expect(updateData.inhaltMarkdown).toContain('- 02:30 Switch konfiguriert [Task: VLAN einrichten]');
+      expect(updateData.reportTasks.create).toEqual([{ taskId: TASK_ID }]);
+    });
+
+    it('rejects whitespace-only descriptions', async () => {
+      await expect(
+        service.saveDays(REPORT_ID, azubi, {
+          tage: [{ datum: '2026-10-12', art: ReportDayArt.betrieb, aktivitaeten: [{ beschreibung: '   ', dauerMinuten: 60 }] }],
+        }),
+      ).rejects.toMatchObject({ errorCode: 'VALIDATION_FAILED' });
+    });
+
+    it('blocks a day over 10:00 for adults', async () => {
+      await expect(
+        service.saveDays(REPORT_ID, azubi, {
+          tage: [{ datum: '2026-10-12', art: ReportDayArt.betrieb, aktivitaeten: [
+            { beschreibung: 'a', dauerMinuten: 600 },
+            { beschreibung: 'b', dauerMinuten: 5 },
+          ] }],
+        }),
+      ).rejects.toMatchObject({ errorCode: 'REPORT_DAY_LIMIT_EXCEEDED' });
+      expect(prisma.reportDay.deleteMany).not.toHaveBeenCalled();
+    });
+
+    it('blocks a day over 8:00 for minors', async () => {
+      geburtsdatum = new Date('2010-05-01T00:00:00Z');
+      await expect(
+        service.saveDays(REPORT_ID, azubi, {
+          tage: [{ datum: '2026-10-12', art: ReportDayArt.betrieb, aktivitaeten: [{ beschreibung: 'a', dauerMinuten: 485 }] }],
+        }),
+      ).rejects.toMatchObject({ errorCode: 'REPORT_DAY_LIMIT_EXCEEDED' });
+    });
+
+    it('rejects unreleased tasks', async () => {
+      prisma.task.count.mockResolvedValueOnce(0);
+      await expect(
+        service.saveDays(REPORT_ID, azubi, {
+          tage: [{ datum: '2026-10-12', art: ReportDayArt.betrieb, aktivitaeten: [{ beschreibung: 'a', dauerMinuten: 60, taskId: TASK_ID }] }],
+        }),
+      ).rejects.toMatchObject({ errorCode: 'TASK_NOT_FOUND' });
+    });
+
+    it('is only allowed in status entwurf', async () => {
+      setReport(report({ status: ReportStatus.eingereicht }));
+      await expect(service.saveDays(REPORT_ID, azubi, { tage: [] })).rejects.toMatchObject({
+        errorCode: 'REPORT_NOT_EDITABLE',
+      });
+    });
+
+    it('rejects editing someone else\'s report', async () => {
+      setReport(report({ azubiId: 'other' }));
+      await expect(service.saveDays(REPORT_ID, azubi, { tage: [] })).rejects.toBeInstanceOf(ForbiddenException);
+    });
+  });
+
+  describe('submit', () => {
+    it('rejects incomplete weeks with the missing days', async () => {
+      setReport(report({
+        tage: [day('2026-10-12', ReportDayArt.betrieb, [480]), day('2026-10-13', ReportDayArt.urlaub)],
+      }));
+
+      const error = await service.submit(REPORT_ID, azubi).catch((e) => e);
+
+      expect(error).toMatchObject({ errorCode: 'REPORT_INCOMPLETE' });
+      expect(error.details[0].fehlendeTage).toEqual(['2026-10-14', '2026-10-15', '2026-10-16']);
+      expect(prisma.report.update).not.toHaveBeenCalled();
+    });
+
+    it('submits a complete week and stores a version', async () => {
+      setReport(report({
+        tage: [
+          day('2026-10-12', ReportDayArt.betrieb, [480]),
+          day('2026-10-13', ReportDayArt.urlaub),
+          day('2026-10-14', ReportDayArt.berufsschule, [360]),
+          day('2026-10-15', ReportDayArt.krank),
+          day('2026-10-16', ReportDayArt.betrieb, [420]),
+        ],
+      }));
+
+      const result = await service.submit(REPORT_ID, azubi);
+
+      expect(prisma.report.update).toHaveBeenCalledWith(expect.objectContaining({ data: { status: ReportStatus.eingereicht } }));
+      expect(prisma.reportVersion.create).toHaveBeenCalled();
+      expect(result.summeMinuten).toBe(1260);
     });
   });
 
   describe('findOne', () => {
-    it('sollte einen einzelnen Bericht zurückgeben', async () => {
-      const mockReport = { id: '1', titel: 'Einzelner Bericht' };
-      (prisma.report.findUnique as any).mockResolvedValueOnce(mockReport);
+    it('returns days with sums and the per-day limit', async () => {
+      geburtsdatum = new Date('2008-10-14T00:00:00Z');
+      setReport(report({
+        tage: [day('2026-10-13', ReportDayArt.betrieb, [120, 60]), day('2026-10-14', ReportDayArt.betrieb, [60])],
+      }));
 
-      const result = await service.findOne('1');
+      const result = await service.findOne(REPORT_ID, azubi);
 
-      expect(prisma.report.findUnique).toHaveBeenCalledWith({ where: { id: '1' } });
-      expect(result).toEqual(mockReport);
-    });
-
-    it('sollte null zurückgeben wenn Bericht nicht existiert', async () => {
-      (prisma.report.findUnique as any).mockResolvedValueOnce(null);
-
-      const result = await service.findOne('non-existent');
-
-      expect(result).toBeNull();
-    });
-  });
-
-  describe('create', () => {
-    it('sollte einen neuen Bericht erstellen', async () => {
-      const createDto = { titel: 'Neuer Bericht', typ: ReportTyp.PROGRESS };
-      const mockReport = { id: 'new-id', ...createDto, status: ReportStatus.IN_BEARBEITUNG };
-
-      (prisma.report.create as any).mockResolvedValueOnce(mockReport);
-
-      const result = await service.create(createDto as any);
-
-      expect(prisma.report.create).toHaveBeenCalled();
-      expect(result.id).toBe('new-id');
-      expect(result.status).toBe(ReportStatus.IN_BEARBEITUNG);
-    });
-  });
-
-  describe('update', () => {
-    it('sollte einen Bericht aktualisieren', async () => {
-      const updateDto = { titel: 'Aktualisierter Bericht', status: ReportStatus.ABGESCHLOSSEN };
-      const mockReport = { id: '1', ...updateDto };
-
-      (prisma.report.update as any).mockResolvedValueOnce(mockReport);
-
-      const result = await service.update('1', updateDto as any);
-
-      expect(prisma.report.update).toHaveBeenCalledWith({
-        where: { id: '1' },
-        data: updateDto,
-      });
-      expect(result.titel).toBe('Aktualisierter Bericht');
-    });
-  });
-
-  describe('remove', () => {
-    it('sollte einen Bericht löschen', async () => {
-      (prisma.report.delete as any).mockResolvedValueOnce({ id: '1' });
-
-      const result = await service.remove('1');
-
-      expect(prisma.report.delete).toHaveBeenCalledWith({ where: { id: '1' } });
-      expect(result.id).toBe('1');
-    });
-  });
-
-  describe('azubiDashboard', () => {
-    it('sollte Azubi-Dashboard mit eingesetzten Aufgaben zurückgeben', async () => {
-      (prisma.report.findMany as any).mockResolvedValueOnce([
-        { id: '1', titel: 'Azubi Report', status: ReportStatus.IN_BEARBEITUNG },
+      expect(result.tage?.map((t) => [t.datum, t.summeMinuten, t.maxMinuten])).toEqual([
+        ['2026-10-13', 180, 480],
+        ['2026-10-14', 60, 600],
       ]);
-      (prisma.zertifikat.findMany as any).mockResolvedValueOnce([
-        { id: 'z1', titel: 'Zertifikat 1' },
-      ]);
-
-      const result = await service['azubiDashboard']({ id: 'user-1' } as any);
-
-      expect(prisma.report.findMany).toHaveBeenCalled();
-      expect(prisma.zertifikat.findMany).toHaveBeenCalled();
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('ausbildungsbeauftragterDashboard', () => {
-    it('sollte Dashboard mit Team-Statistiken zurückgeben', async () => {
-      (prisma.report.findMany as any).mockResolvedValueOnce([
-        { id: '1', status: ReportStatus.IN_BEARBEITUNG },
-        { id: '2', status: ReportStatus.ABGESCHLOSSEN },
-      ]);
-
-      const result = await service['ausbildungsbeauftragterDashboard']({ id: 'user-1' } as any);
-
-      expect(prisma.report.findMany).toHaveBeenCalled();
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('managementDashboard', () => {
-    it('sollte Management-Dashboard mit Gesamtstatistiken zurückgeben', async () => {
-      (prisma.report.findMany as any).mockResolvedValueOnce([
-        { id: '1', status: ReportStatus.IN_BEARBEITUNG },
-        { id: '2', status: ReportStatus.ABGESCHLOSSEN },
-        { id: '3', status: ReportStatus.ABGELEHNT },
-      ]);
-      (prisma.zertifikat.findMany as any).mockResolvedValueOnce([
-        { id: 'z1', titel: 'Zertifikat' },
-      ]);
-
-      const result = await service['managementDashboard']({ id: 'user-1' } as any);
-
-      expect(prisma.report.findMany).toHaveBeenCalled();
-      expect(prisma.zertifikat.findMany).toHaveBeenCalled();
-      expect(result).toBeDefined();
-    });
-  });
-
-  describe('getDashboard', () => {
-    it('sollte azubiDashboard für azubi-Rolle aufrufen', async () => {
-      const spy = vi.spyOn(service as any, 'azubiDashboard').mockResolvedValueOnce({ type: 'azubi' });
-
-      const result = await service.getDashboard({ role: 'azubi' } as any);
-
-      expect(spy).toHaveBeenCalledWith({ id: 'user-1' });
-      expect(result.type).toBe('azubi');
-    });
-
-    it('sollte ausbildungsbeauftragterDashboard für ausbildungsbeauftragter-Rolle aufrufen', async () => {
-      const spy = vi.spyOn(service as any, 'ausbildungsbeauftragterDashboard').mockResolvedValueOnce({ type: 'ausbildungsbeauftragter' });
-
-      const result = await service.getDashboard({ role: 'ausbildungsbeauftragter' } as any);
-
-      expect(spy).toHaveBeenCalled();
-      expect(result.type).toBe('ausbildungsbeauftragter');
-    });
-
-    it('sollte managementDashboard für andere Rollen aufrufen', async () => {
-      const spy = vi.spyOn(service as any, 'managementDashboard').mockResolvedValueOnce({ type: 'management' });
-
-      const result = await service.getDashboard({ role: 'hr' } as any);
-
-      expect(spy).toHaveBeenCalled();
-      expect(result.type).toBe('management');
+      expect(result.summeMinuten).toBe(240);
+      expect(result.maxMinutenWoche).toBe(2400);
     });
   });
 });
