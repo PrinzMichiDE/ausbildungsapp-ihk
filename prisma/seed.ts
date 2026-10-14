@@ -40,6 +40,13 @@ async function main(): Promise<void> {
     }
   }
 
+  // Azubis reference themselves via azubiId (same convention as UsersService).
+  const azubi = await prisma.user.findUniqueOrThrow({ where: { email: azubiEmail } });
+  if (azubi.azubiId !== azubi.id) {
+    await prisma.user.update({ where: { id: azubi.id }, data: { azubiId: azubi.id } });
+    console.log(`azubiId gesetzt: ${azubi.email}`);
+  }
+
   const defaultBadges = [
     { schluessel: 'punktlich-berichtet', titel: 'Immer pünktlich berichtet', beschreibung: 'Berichtsheft regelmäßig fristgerecht eingereicht', icon: 'pi-clock' },
     { schluessel: 'erstes-zertifikat', titel: 'Erstes Zertifikat', beschreibung: 'Erstes Hersteller-Zertifikat erworben', icon: 'pi-verified' },
