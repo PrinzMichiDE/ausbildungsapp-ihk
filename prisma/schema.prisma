@@ -34,6 +34,15 @@ enum ReportTyp {
   schulung
 }
 
+enum ReportDayArt {
+  betrieb
+  berufsschule
+  schulung
+  urlaub
+  krank
+  feiertag
+}
+
 enum AbwesenheitTyp {
   urlaub
   krank
@@ -74,6 +83,7 @@ model User {
   lastName     String   @map("last_name")
   isActive     Boolean  @default(true) @map("is_active")
   azubiId      String?  @unique @map("azubi_id")
+  geburtsdatum DateTime? @db.Date @map("geburtsdatum")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -230,6 +240,7 @@ model Task {
   framework Framework  @relation(fields: [frameworkId], references: [id], onDelete: Cascade)
   course    Course?    @relation(fields: [courseId], references: [id], onDelete: SetNull)
   reportTasks ReportTask[]
+  reportActivities ReportActivity[]
 
   @@index([frameworkId], map: "idx_task_framework_id")
   @@index([courseId], map: "idx_task_course_id")
@@ -259,12 +270,48 @@ model Report {
   attachments ReportAttachment[]
    versions ReportVersion[]
    timeEntries ReportTimeEntry[]
+   tage ReportDay[]
    ausbildungsnachweisId String? @map("ausbildungsnachweis_id")
 
+   @@unique([azubiId, jahr, kalenderwoche], map: "uq_report_azubi_jahr_kw")
    @@index([azubiId], map: "idx_report_azubi_id")
   @@index([status], map: "idx_report_status")
   @@index([jahr, kalenderwoche], map: "idx_report_jahr_kw")
   @@map("reports")
+}
+
+model ReportDay {
+  id        String       @id @default(uuid())
+  reportId  String       @map("report_id")
+  datum     DateTime     @db.Date
+  art       ReportDayArt @default(betrieb)
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  report       Report           @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  aktivitaeten ReportActivity[]
+
+  @@unique([reportId, datum], map: "uq_report_day_report_datum")
+  @@index([reportId], map: "idx_report_day_report_id")
+  @@map("report_days")
+}
+
+model ReportActivity {
+  id           String   @id @default(uuid())
+  dayId        String   @map("day_id")
+  beschreibung String
+  dauerMinuten Int      @map("dauer_minuten")
+  sortierung   Int      @default(0)
+  taskId       String?  @map("task_id")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  day  ReportDay @relation(fields: [dayId], references: [id], onDelete: Cascade)
+  task Task?     @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  @@index([dayId], map: "idx_report_activity_day_id")
+  @@index([taskId], map: "idx_report_activity_task_id")
+  @@map("report_activities")
 }
 
 model ReportTask {
