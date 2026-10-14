@@ -2,12 +2,14 @@
 import {
   IsArray,
   IsBoolean,
+  IsDateString,
   IsEmail,
   IsOptional,
   IsString,
   IsUUID,
   Matches,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { Role, ALL_ROLES } from '../../../common/constants/roles.js';
 
@@ -62,6 +64,17 @@ export class UpdateUserDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: '2008-10-14',
+    description: 'Geburtsdatum (YYYY-MM-DD) für die JArbSchG-Tagesgrenze; null entfernt es',
+  })
+  @IsOptional()
+  @ValidateIf((_, value) => value !== null)
+  @IsDateString({ strict: true })
+  geburtsdatum?: string | null;
 }
 
 export class UserResponseDto {
@@ -88,6 +101,17 @@ export class UserResponseDto {
 
   @ApiProperty()
   mfaActive: boolean;
+
+  @ApiProperty({ description: 'Ob ein Geburtsdatum hinterlegt ist (JArbSchG prüfbar)' })
+  geburtsdatumHinterlegt: boolean;
+
+  @ApiProperty({
+    required: false,
+    nullable: true,
+    example: '2008-10-14',
+    description: 'Nur für Admin/HR sichtbar',
+  })
+  geburtsdatum?: string | null;
 }
 
 export class MfaSecretDto {

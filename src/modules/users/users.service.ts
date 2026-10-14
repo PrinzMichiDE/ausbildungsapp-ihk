@@ -33,10 +33,17 @@ interface UserWithRelations {
   isActive: boolean;
   passwordHash: string;
   azubiId: string | null;
+  geburtsdatum: Date | null;
   mfaSecret: string | null;
   mfaActive: boolean;
   roles: Array<{ role: Role }>;
   abteilungen: Array<{ id: string }>;
+}
+
+const PERSONAL_DATA_ROLES: readonly Role[] = [Role.admin, Role.hr];
+
+function canSeePersonalData(viewer?: CurrentUser): boolean {
+  return !!viewer && viewer.roles.some((r) => PERSONAL_DATA_ROLES.includes(r));
 }
 
 @Injectable()
@@ -97,7 +104,7 @@ export class UsersService {
     });
   }
 
-  async findById(id: string): Promise<UserResponseDto> {
+  async findById(id: string, viewer?: CurrentUser): Promise<UserResponseDto> {
     const user = await this.prisma.user.findUnique({
       where: { id },
       include: { roles: true, abteilungen: true },
@@ -108,7 +115,7 @@ export class UsersService {
         message: `User ${id} nicht gefunden`,
       });
     }
-    return this.toResponse(user);
+    return this.toResponse(user, viewer);
   }
 
   async findAll(currentUser: CurrentUser): Promise<UserResponseDto[]> {
@@ -126,7 +133,7 @@ export class UsersService {
       include: { roles: true, abteilungen: true },
       orderBy: { lastName: 'asc' },
     });
-    return users.map((u) => this.toResponse(u));
+    return users.map((u) => this.toResponse(u, currentUser));
   }
 
   async update(
@@ -188,11 +195,20 @@ export class UsersService {
         });
       }
 
+      if (dto.geburtsdatum !== undefined) {
+        await tx.user.update({
+          where: { id },
+          data: {
+            geburtsdatum: dto.geburtsdatum === null ? null : new Date(`${dto.geburtsdatum}T00:00:00Z`),
+          },
+        });
+      }
+
       const updated = await tx.user.findUnique({
         where: { id },
         include: { roles: true, abteilungen: true },
       });
-      const response = this.toResponse(updated!);
+      const response = this.toResponse(updated!, currentUser);
 
       await this.audit.create(currentUser, {
         action: 'USER_UPDATED',
@@ -202,6 +218,8 @@ export class UsersService {
           roles: dto.roles,
           abteilungIds: dto.abteilungIds,
           isActive: dto.isActive,
+          // Only record that the birth date changed, not its value (data minimisation).
+          geburtsdatumGeaendert: dto.geburtsdatum !== undefined || undefined,
         }),
       });
 
@@ -220,7 +238,7 @@ export class UsersService {
     await this.prisma.user.delete({ where: { id } });
   }
 
-  toResponse(user: UserWithRelations): UserResponseDto {
+  toResponse(user: UserWithRelations, viewer?: CurrentUser): UserResponseDto {
     return {
       id: user.id,
       email: user.email,
@@ -230,6 +248,10 @@ export class UsersService {
       roles: user.roles.map((r) => r.role),
       abteilungIds: user.abteilungen.map((a) => a.id),
       mfaActive: user.mfaActive,
+      geburtsdatumHinterlegt: user.geburtsdatum !== null,
+      ...(canSeePersonalData(viewer)
+        ? { geburtsdatum: user.geburtsdatum ? user.geburtsdatum.toISOString().slice(0, 10) : null }
+        : {}),
     };
   }
 

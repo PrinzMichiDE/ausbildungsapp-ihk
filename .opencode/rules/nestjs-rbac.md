@@ -62,6 +62,7 @@ async getVisibleAzubiIds(user: CurrentUser): Promise<string[] | 'ALL'> {
 | Aktion | Azubi | Ausb.-beauftragter | Ausbilder | HR | Admin |
 |---|---|---|---|---|---|
 | Bericht erstellen/bearbeiten (eigener, Status `entwurf`) | ✅ | ❌ | ❌ | ❌ | ❌ |
+| Wochenerfassung speichern (`PUT /berichte/:id/tage`, eigener, Status `entwurf`) | ✅ | ❌ | ❌ | ❌ | ❌ |
 | Bericht einreichen | ✅ (eigener) | ❌ | ❌ | ❌ | ❌ |
 | Bericht kommentieren/prüfen | ❌ | ✅ (Azubi im eigenen Einsatz) | ✅ (alle) | ❌ | ❌ |
 | Bericht final visieren | ❌ | ❌ | ✅ | ❌ | ❌ |
@@ -71,6 +72,7 @@ async getVisibleAzubiIds(user: CurrentUser): Promise<string[] | 'ALL'> {
 | Zertifikat hochladen | ✅ (eigenes) | ❌ | ❌ (lesen) | ❌ (lesen) | ❌ |
 | Skill-Matrix als "vermittelt" markieren | ❌ | ✅ (eigene Abteilung) | ✅ | ❌ | ❌ |
 | Rollen/Rechte verwalten | ❌ | ❌ | ❌ | ❌ | ✅ |
+| Geburtsdatum pflegen/einsehen (JArbSchG-Grenze) | ❌ | ❌ | ❌ (nur „hinterlegt ja/nein“) | ✅ | ✅ |
 
 - Diese Matrix ist die **Referenz** für jeden neuen Endpoint — bei Unklarheit wird sie zuerst ergänzt, dann implementiert, nicht umgekehrt.
 - Neue Aktionen, die nicht in der Matrix stehen, werden **nicht** implementiert, ohne die Matrix vorher im PR zu erweitern.

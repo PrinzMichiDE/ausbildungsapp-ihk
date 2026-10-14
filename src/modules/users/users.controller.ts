@@ -63,10 +63,10 @@ export class UsersController {
         message: 'Kein Zugriff auf diesen Nutzer',
       });
     }
-    return this.usersService.findById(id);
+    return this.usersService.findById(id, user);
   }
 
-  @ApiOperation({ summary: 'Aktualisiert Rollen/Abteilungen (Admin/HR)' })
+  @ApiOperation({ summary: 'Aktualisiert Rollen/Abteilungen/Status/Geburtsdatum (Admin/HR)' })
   @ApiResponse({ status: 200, type: UserResponseDto })
   @Roles(Role.admin, Role.hr)
   @Patch(':id')
