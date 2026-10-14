@@ -19,7 +19,7 @@ export const useCertificateStore = defineStore('certificate', () => {
   async function fetchCertificates() {
     loading.value = true
     try {
-      const res = await api.get<{ data: Certificate[] }>('/api/zertifikate')
+      const res = await api.get<{ data: Certificate[] }>('/zertifikate')
       certificates.value = res.data.data
     } finally {
       loading.value = false

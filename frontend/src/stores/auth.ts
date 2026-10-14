@@ -63,7 +63,7 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function login(email: string, password: string) {
-    const res = await api.post<LoginResponse>('/api/auth/login', { email, password })
+    const res = await api.post<LoginResponse>('/auth/login', { email, password })
     const body = res.data
 
     if (isMfaResponse(body)) {
@@ -79,7 +79,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function verifyMfa(code: string) {
     if (!mfaPendingToken.value) throw new Error('No MFA pending')
-    const res = await api.post<AuthSuccessResponse>('/api/auth/verify-mfa', {
+    const res = await api.post<AuthSuccessResponse>('/auth/verify-mfa', {
       pendingToken: mfaPendingToken.value,
       code,
     })
@@ -91,7 +91,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function doRefreshToken() {
     if (!refreshTokenValue.value) throw new Error('No refresh token')
-    const res = await api.post<AuthSuccessResponse>('/api/auth/refresh', {
+    const res = await api.post<AuthSuccessResponse>('/auth/refresh', {
       refreshToken: refreshTokenValue.value,
     })
     persistTokens(res.data.data.accessToken, res.data.data.refreshToken)

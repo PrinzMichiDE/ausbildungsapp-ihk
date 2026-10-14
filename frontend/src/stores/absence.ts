@@ -24,7 +24,7 @@ export const useAbsenceStore = defineStore('absence', () => {
   async function fetchAbsences() {
     loading.value = true
     try {
-      const res = await api.get<AbsenceResponse>('/api/absence')
+      const res = await api.get<AbsenceResponse>('/abwesenheit')
       absences.value = res.data.data
     } finally {
       loading.value = false
@@ -40,7 +40,7 @@ export const useAbsenceStore = defineStore('absence', () => {
   }) {
     saving.value = true
     try {
-      const res = await api.post<{ data: Absence }>('/api/absence', data)
+      const res = await api.post<{ data: Absence }>('/abwesenheit', data)
       absences.value.unshift(res.data.data)
       return res.data.data
     } finally {
@@ -51,7 +51,7 @@ export const useAbsenceStore = defineStore('absence', () => {
   async function updateAbsence(id: string, data: { typ?: string; von?: string; bis?: string; notiz?: string }) {
     saving.value = true
     try {
-      const res = await api.patch<{ data: Absence }>(`/api/absence/${id}`, data)
+      const res = await api.patch<{ data: Absence }>(`/abwesenheit/${id}`, data)
       const idx = absences.value.findIndex((a) => a.id === id)
       if (idx !== -1) absences.value[idx] = res.data.data
       return res.data.data
@@ -63,7 +63,7 @@ export const useAbsenceStore = defineStore('absence', () => {
   async function deleteAbsence(id: string) {
     saving.value = true
     try {
-      await api.delete(`/api/absence/${id}`)
+      await api.delete(`/abwesenheit/${id}`)
       absences.value = absences.value.filter((a) => a.id !== id)
     } finally {
       saving.value = false

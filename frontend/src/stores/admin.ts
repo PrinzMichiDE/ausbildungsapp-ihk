@@ -51,7 +51,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function fetchUsers() {
     loading.value = true
     try {
-      const res = await api.get<{ data: AdminUser[] }>('/api/users')
+      const res = await api.get<{ data: AdminUser[] }>('/users')
       users.value = res.data.data
     } finally {
       loading.value = false
@@ -61,7 +61,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function fetchRoles() {
     loading.value = true
     try {
-      const res = await api.get<{ data: AdminRole[] }>('/api/roles')
+      const res = await api.get<{ data: AdminRole[] }>('/roles')
       roles.value = res.data.data
     } finally {
       loading.value = false
@@ -78,7 +78,7 @@ export const useAdminStore = defineStore('admin', () => {
   }) {
     saving.value = true
     try {
-      const res = await api.post<{ data: AdminUser }>('/api/users', data)
+      const res = await api.post<{ data: AdminUser }>('/users', data)
       users.value.unshift(res.data.data)
       return res.data.data
     } finally {
@@ -92,7 +92,7 @@ export const useAdminStore = defineStore('admin', () => {
   ) {
     saving.value = true
     try {
-      const res = await api.patch<{ data: AdminUser }>(`/api/users/${id}`, data)
+      const res = await api.patch<{ data: AdminUser }>(`/users/${id}`, data)
       const idx = users.value.findIndex((u) => u.id === id)
       if (idx !== -1) users.value[idx] = res.data.data
       return res.data.data
@@ -104,7 +104,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function deleteUser(id: string) {
     saving.value = true
     try {
-      await api.delete(`/api/users/${id}`)
+      await api.delete(`/users/${id}`)
       users.value = users.value.filter((u) => u.id !== id)
     } finally {
       saving.value = false
@@ -138,7 +138,7 @@ export const useAdminStore = defineStore('admin', () => {
   async function createRole(data: { name: string; beschreibung?: string }) {
     saving.value = true
     try {
-      const res = await api.post<{ data: AdminRole }>('/api/roles', data)
+      const res = await api.post<{ data: AdminRole }>('/roles', data)
       roles.value.push(res.data.data)
       return res.data.data
     } finally {
