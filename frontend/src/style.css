@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class strategy: `dark:` follows the `.dark` class set by useUiStore, not the OS setting. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-brand-50: #f5f3ff;
   --color-brand-100: #ede9fe;
