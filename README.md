@@ -27,6 +27,16 @@ npm run start:dev                        # API auf http://localhost:3000/api
 
 Swagger: `http://localhost:3000/api/docs`
 
+### Komplett in Docker (Backend + Weboberfläche)
+
+```bash
+docker compose up -d --build             # DB, Migrationen, App (inkl. gebautem Frontend), Adminer
+```
+
+- Weboberfläche + API: `http://localhost:3000` (API unter `/api/v1`)
+- Adminer: `http://localhost:8080` (Server `db`, User/Passwort `app`)
+- Demo-Daten einmalig: `docker compose run --rm migrate npx prisma db seed`
+
 ## Module & Verantwortlichkeit (Auszug)
 
 | Modul | Pfad | Kern |

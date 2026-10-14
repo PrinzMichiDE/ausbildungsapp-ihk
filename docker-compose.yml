@@ -17,6 +17,53 @@ services:
       timeout: 5s
       retries: 10
 
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: nextgen-app:builder
+    container_name: nextgen-migrate
+    environment:
+      DATABASE_URL: postgresql://app:app@db:5432/nextgen
+    command: ["npx", "prisma", "migrate", "deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nextgen-app:local
+    container_name: nextgen-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://app:app@db:5432/nextgen
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      AI_PROVIDER: ${AI_PROVIDER:-ollama}
+      AI_BASE_URL: ${AI_BASE_URL_DOCKER:-http://host.docker.internal:11434}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-llama3.1}
+      AI_EMBEDDING_MODEL: ${AI_EMBEDDING_MODEL:-nomic-embed-text}
+      AI_EMBEDDING_DIMENSIONS: ${AI_EMBEDDING_DIMENSIONS:-768}
+      TEAMS_WEBHOOK_URL: ${TEAMS_WEBHOOK_URL:-}
+      CORS_ORIGINS: http://localhost:3000,http://localhost:5173
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+    ports:
+      - "3000:3000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
   adminer:
     image: adminer:4
     container_name: nextgen-adminer

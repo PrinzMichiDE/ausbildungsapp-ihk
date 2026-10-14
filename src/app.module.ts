@@ -55,8 +55,7 @@ import { AzubiAkteModule } from './modules/azubiakte/azubi-akte.module.js';
   imports: [
     ServeStaticModule.forRoot({
       rootPath: join(process.cwd(), 'frontend', 'dist'),
-      exclude: ['/api/(.*)'],
-      renderPath: 'index.html',
+      exclude: ['/api/{*path}'],
     }),
     ConfigModule.forRoot({
       isGlobal: true,
